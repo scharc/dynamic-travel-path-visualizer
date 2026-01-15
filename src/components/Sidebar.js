@@ -79,46 +79,95 @@ const Sidebar = ({
     setLabelPosition,
     curveHeight,
     setCurveHeight,
-    handleImageUpload,
+    handleOriginImageUpload,
+    handleDestinationImageUpload,
     handleExport,
+    handleExportZip,
+    theme,
+    setTheme,
+    cropEnabled,
+    setCropEnabled,
+    cropBounds,
+    setCropBounds,
+    cropAspectRatio,
+    setCropAspectRatio,
+    animations,
+    setAnimations,
+    colorPalette,
+    setColorPalette,
+    mapStyle,
+    setMapStyle,
+    labelFont,
+    setLabelFont,
 }) => {
+    // Color palette presets
+    const colorPalettes = {
+        custom: null,
+        ocean: { origin: '#0077b6', destination: '#00b4d8', arc: '#90e0ef', travel: '#023e8a' },
+        sunset: { origin: '#ff6b35', destination: '#f7c59f', arc: '#ff9f1c', travel: '#d62828' },
+        forest: { origin: '#2d6a4f', destination: '#40916c', arc: '#74c69d', travel: '#1b4332' },
+        midnight: { origin: '#7400b8', destination: '#5e60ce', arc: '#48bfe3', travel: '#560bad' },
+        earth: { origin: '#bc6c25', destination: '#dda15e', arc: '#606c38', travel: '#283618' },
+        candy: { origin: '#ff006e', destination: '#8338ec', arc: '#3a86ff', travel: '#fb5607' },
+    };
+
+    const applyColorPalette = (paletteName) => {
+        setColorPalette(paletteName);
+        const palette = colorPalettes[paletteName];
+        if (palette) {
+            setOriginColor(palette.origin);
+            setDestinationColor(palette.destination);
+            setArcColor(palette.arc);
+            setTravelIconColor(palette.travel);
+        }
+    };
+    const isDark = theme === 'dark';
     return (
-        <div className="w-72 p-2 bg-gray-100 border-r border-gray-300 overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Map Controls</h2>
+        <div className={`w-72 p-2 border-r overflow-y-auto ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-100 border-gray-300'}`}>
+            {/* Theme Toggle */}
+            <div className="mb-4 flex items-center justify-between">
+                <h2 className={`text-lg font-bold ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>Map Controls</h2>
+                <button
+                    onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                    className={`px-3 py-1 rounded text-sm font-medium ${isDark ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
+                >
+                    {isDark ? 'Light' : 'Dark'}
+                </button>
+            </div>
 
             {/* Origin Point */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Origin Point</h3>
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Origin Point</h3>
                 <div className="grid grid-cols-2 gap-2">
                     <label>
-                        <span className="text-xs text-gray-600">Lat</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lat</span>
                         <input
                             type="number"
                             value={originLat}
                             onChange={(e) => setOriginLat(parseFloat(e.target.value))}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Lon</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lon</span>
                         <input
                             type="number"
                             value={originLng}
                             onChange={(e) => setOriginLng(parseFloat(e.target.value))}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Label</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Label</span>
                         <input
                             type="text"
                             value={originLabel}
                             onChange={(e) => setOriginLabel(e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Color</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Color</span>
                         <input
                             type="color"
                             value={originColor}
@@ -127,22 +176,21 @@ const Sidebar = ({
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Icon</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon</span>
                         <select
                             value={originIcon}
                             onChange={(e) => setOriginIcon(e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         >
                             {Object.keys(availableIcons).map((key) => (
                                 <option key={key} value={key}>
-                                    {key.replace('Fa', '')} {/* Display without 'Fa' */}
+                                    {key.replace('Fa', '')}
                                 </option>
                             ))}
                         </select>
-
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Icon Size ({originIconSize})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon Size ({originIconSize})</span>
                         <input
                             type="range"
                             min="2"
@@ -152,42 +200,51 @@ const Sidebar = ({
                             className="w-full"
                         />
                     </label>
+                    <label className={`col-span-2 block text-center py-1 px-2 rounded cursor-pointer text-xs ${isDark ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
+                        Upload Photo for Origin
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleOriginImageUpload}
+                            className="hidden"
+                        />
+                    </label>
                 </div>
             </div>
 
             {/* Destination Point */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Destination Point</h3>
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Destination Point</h3>
                 <div className="grid grid-cols-2 gap-2">
                     <label>
-                        <span className="text-xs text-gray-600">Lat</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lat</span>
                         <input
                             type="number"
                             value={destinationLat}
                             onChange={(e) => setDestinationLat(parseFloat(e.target.value))}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Lon</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lon</span>
                         <input
                             type="number"
                             value={destinationLng}
                             onChange={(e) => setDestinationLng(parseFloat(e.target.value))}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Label</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Label</span>
                         <input
                             type="text"
                             value={destinationLabel}
                             onChange={(e) => setDestinationLabel(e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Color</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Color</span>
                         <input
                             type="color"
                             value={destinationColor}
@@ -196,21 +253,21 @@ const Sidebar = ({
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Icon</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon</span>
                         <select
                             value={destinationIcon}
-                            onChange={(e) => setDestinationIcon(e.target.value)} // Use setDestinationIcon here
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            onChange={(e) => setDestinationIcon(e.target.value)}
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                         >
                             {Object.keys(availableIcons).map((key) => (
                                 <option key={key} value={key}>
-                                    {key.replace('Fa', '')} {/* Display without 'Fa' */}
+                                    {key.replace('Fa', '')}
                                 </option>
                             ))}
                         </select>
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Icon Size ({destinationIconSize})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon Size ({destinationIconSize})</span>
                         <input
                             type="range"
                             min="2"
@@ -220,18 +277,27 @@ const Sidebar = ({
                             className="w-full"
                         />
                     </label>
+                    <label className={`col-span-2 block text-center py-1 px-2 rounded cursor-pointer text-xs ${isDark ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
+                        Upload Photo for Destination
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleDestinationImageUpload}
+                            className="hidden"
+                        />
+                    </label>
                 </div>
             </div>
 
             {/* Travel Mode */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Travel Mode</h3>
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Travel Mode</h3>
                 <div className="flex items-center gap-2">
                     {/* Icon Dropdown */}
                     <select
                         value={travelModeIcon}
                         onChange={(e) => setTravelModeIcon(e.target.value)}
-                        className="w-24 px-2 py-1 border rounded text-sm"
+                        className={`w-24 px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     >
                         <option value="">No Icon</option>
                         {Object.keys(availableTravelModes).map((key) => (
@@ -253,7 +319,7 @@ const Sidebar = ({
 
                     {/* Icon Size Slider */}
                     <label className="flex items-center">
-                        <span className="text-xs text-gray-600">Size ({travelIconSize})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Size ({travelIconSize})</span>
                         <input
                             type="range"
                             min="2"
@@ -268,10 +334,10 @@ const Sidebar = ({
 
             {/* Arc Styling */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Arc Styling</h3>
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Arc Styling</h3>
                 <div className="grid grid-cols-2 gap-2">
                     <label>
-                        <span className="text-xs text-gray-600">Curve Height ({curveHeight})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Curve Height ({curveHeight})</span>
                         <input
                             type="range"
                             min="0"
@@ -283,7 +349,7 @@ const Sidebar = ({
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Arc Width ({arcWidth})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Arc Width ({arcWidth})</span>
                         <input
                             type="range"
                             min="1"
@@ -294,7 +360,7 @@ const Sidebar = ({
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Dash Array ({arcDashArray})</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Dash Array ({arcDashArray})</span>
                         <input
                             type="range"
                             min="1"
@@ -305,7 +371,7 @@ const Sidebar = ({
                         />
                     </label>
                     <label>
-                        <span className="text-xs text-gray-600">Arc Color</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Arc Color</span>
                         <input
                             type="color"
                             value={arcColor}
@@ -318,9 +384,9 @@ const Sidebar = ({
 
             {/* Label Options */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Label Options</h3>
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Label Options</h3>
                 <label>
-                    <span className="text-xs text-gray-600">Font Size ({labelSize})</span>
+                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Font Size ({labelSize})</span>
                     <input
                         type="range"
                         min="2"
@@ -331,37 +397,177 @@ const Sidebar = ({
                     />
                 </label>
                 <label>
-                    <span className="text-xs text-gray-600">Position</span>
+                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Position</span>
                     <select
                         value={labelPosition}
                         onChange={(e) => setLabelPosition(e.target.value)}
-                        className="w-full px-2 py-1 border rounded text-sm"
+                        className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     >
                         <option value="top">Top</option>
                         <option value="right">Right</option>
                         <option value="bottom">Bottom</option>
                     </select>
                 </label>
+                <label>
+                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Font</span>
+                    <select
+                        value={labelFont}
+                        onChange={(e) => setLabelFont(e.target.value)}
+                        className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                    >
+                        <option value="sans-serif">Sans-serif</option>
+                        <option value="serif">Serif</option>
+                        <option value="monospace">Monospace</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="'Times New Roman', serif">Times New Roman</option>
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="'Courier New', monospace">Courier New</option>
+                        <option value="Verdana, sans-serif">Verdana</option>
+                        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                        <option value="Impact, sans-serif">Impact</option>
+                    </select>
+                </label>
             </div>
 
-            {/* Image Upload */}
+            {/* Animations Section */}
             <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-1">Image Upload</h3>
-                <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="w-full text-xs text-gray-600"
-                />
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Animations</h3>
+                <div className="space-y-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={animations.dashFlow}
+                            onChange={(e) => setAnimations(prev => ({ ...prev, dashFlow: e.target.checked, drawLine: false }))}
+                            className="w-3 h-3"
+                        />
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Flowing dashes</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={animations.drawLine}
+                            onChange={(e) => setAnimations(prev => ({ ...prev, drawLine: e.target.checked, dashFlow: false }))}
+                            className="w-3 h-3"
+                        />
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Draw line effect</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={animations.travelingIcon}
+                            onChange={(e) => setAnimations(prev => ({ ...prev, travelingIcon: e.target.checked }))}
+                            className="w-3 h-3"
+                        />
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Traveling icon</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={animations.pulsingMarkers}
+                            onChange={(e) => setAnimations(prev => ({ ...prev, pulsingMarkers: e.target.checked }))}
+                            className="w-3 h-3"
+                        />
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Pulsing markers</span>
+                    </label>
+                </div>
             </div>
 
-            {/* Export Button */}
+            {/* Color Palette Section */}
+            <div className="mb-4">
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Color Palette</h3>
+                <select
+                    value={colorPalette}
+                    onChange={(e) => applyColorPalette(e.target.value)}
+                    className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                >
+                    <option value="custom">Custom</option>
+                    <option value="ocean">Ocean</option>
+                    <option value="sunset">Sunset</option>
+                    <option value="forest">Forest</option>
+                    <option value="midnight">Midnight</option>
+                    <option value="earth">Earth</option>
+                    <option value="candy">Candy</option>
+                </select>
+            </div>
+
+            {/* Map Style Section */}
+            <div className="mb-4">
+                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Map Style</h3>
+                <select
+                    value={mapStyle}
+                    onChange={(e) => setMapStyle(e.target.value)}
+                    className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                >
+                    <option value="default">Default</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="satellite">Satellite</option>
+                    <option value="vintage">Vintage</option>
+                    <option value="blueprint">Blueprint</option>
+                </select>
+            </div>
+
+            {/* Crop / Export Section */}
             <div className="mt-4">
+                <h3 className={`text-md font-semibold mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Export Options</h3>
+
+                {/* Crop Toggle */}
+                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={cropEnabled}
+                        onChange={(e) => setCropEnabled(e.target.checked)}
+                        className="w-4 h-4"
+                    />
+                    <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Enable crop selection
+                    </span>
+                </label>
+
+                {/* Aspect Ratio Selector (when crop enabled) */}
+                {cropEnabled && (
+                    <div className="mb-3">
+                        <span className={`text-xs block mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Aspect Ratio</span>
+                        <select
+                            value={cropAspectRatio}
+                            onChange={(e) => {
+                                const newRatio = e.target.value;
+                                setCropAspectRatio(newRatio);
+                                // Apply aspect ratio to current crop bounds
+                                if (newRatio !== 'free') {
+                                    const [w, h] = newRatio.split(':').map(Number);
+                                    const ratio = w / h;
+                                    setCropBounds(prev => ({
+                                        ...prev,
+                                        height: prev.width / ratio
+                                    }));
+                                }
+                            }}
+                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                        >
+                            <option value="free">Free</option>
+                            <option value="1:1">1:1 (Square)</option>
+                            <option value="16:9">16:9 (Widescreen)</option>
+                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="4:3">4:3 (Standard)</option>
+                            <option value="3:4">3:4 (Portrait)</option>
+                            <option value="3:2">3:2 (Photo)</option>
+                            <option value="2:3">2:3 (Portrait Photo)</option>
+                            <option value="21:9">21:9 (Ultrawide)</option>
+                        </select>
+                    </div>
+                )}
+
                 <button
                     onClick={handleExport}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mb-2"
                 >
-                    Export Map
+                    {cropEnabled ? 'Export Cropped SVG' : 'Export SVG'}
+                </button>
+                <button
+                    onClick={handleExportZip}
+                    className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded"
+                >
+                    Export ZIP (with animations)
                 </button>
             </div>
         </div>
