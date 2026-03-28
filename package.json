@@ -3,6 +3,7 @@
   "readme": "README.md",
   "license": "LICENSE",
   "version": "0.1.0",
+  "homepage": "https://scharc.github.io/dynamic-travel-path-visualizer",
   "repository": {
     "type": "git",
     "url": "https://github.com/scharc/Dynamic-Travel-Path-Visualizer"
