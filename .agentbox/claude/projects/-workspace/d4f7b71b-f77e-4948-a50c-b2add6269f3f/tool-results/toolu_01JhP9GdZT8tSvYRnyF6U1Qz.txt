@@ -1,0 +1,1459 @@
+diff --git a/package.json b/package.json
+index 2ae9fa1..0721e94 100644
+--- a/package.json
++++ b/package.json
+@@ -3,7 +3,6 @@
+   "readme": "README.md",
+   "license": "LICENSE",
+   "version": "0.1.0",
+-
+   "repository": {
+     "type": "git",
+     "url": "https://github.com/scharc/Dynamic-Travel-Path-Visualizer"
+@@ -15,6 +14,7 @@
+     "@testing-library/user-event": "^13.5.0",
+     "d3-shape": "^3.2.0",
+     "exif-js": "^2.3.0",
++    "jszip": "^3.10.1",
+     "react": "^18.3.1",
+     "react-dom": "^18.3.1",
+     "react-icons": "^5.3.0",
+diff --git a/src/App.js b/src/App.js
+index e38e132..3efdda5 100644
+--- a/src/App.js
++++ b/src/App.js
+@@ -1,82 +1,184 @@
+-import React, { useState, useRef } from 'react';
++import React, { useState, useRef, useEffect } from 'react';
+ import EXIF from 'exif-js';
++import JSZip from 'jszip';
+ import Sidebar from './components/Sidebar';
+ import FlightMap from './components/FlightMap';
+ 
++// Helper to get value from localStorage with fallback
++const getStoredValue = (key, defaultValue) => {
++  try {
++    const stored = localStorage.getItem(`flightPath_${key}`);
++    if (stored !== null) {
++      return JSON.parse(stored);
++    }
++  } catch (e) {
++    console.warn(`Error reading ${key} from localStorage:`, e);
++  }
++  return defaultValue;
++};
++
+ function App() {
+-  const [originLat, setOriginLat] = useState(49.0078593);
+-  const [originLng, setOriginLng] = useState(8.4010293);
+-  const [destinationLat, setDestinationLat] = useState(40.6973709);
+-  const [destinationLng, setDestinationLng] = useState(-74.144487);
+-  const [originLabel, setOriginLabel] = useState('Karlsruhe');
+-  const [destinationLabel, setDestinationLabel] = useState('New York');
+-  const [originColor, setOriginColor] = useState('#0000ff');
+-  const [destinationColor, setDestinationColor] = useState('#ff0000');
+-  const [arcColor, setArcColor] = useState('#00ff00');
+-  const [arcWidth, setArcWidth] = useState(2);
+-  const [arcDashArray, setArcDashArray] = useState(5);
+-  const [curveHeight, setCurveHeight] = useState(0.5);
++  const [originLat, setOriginLat] = useState(() => getStoredValue('originLat', 49.0078593));
++  const [originLng, setOriginLng] = useState(() => getStoredValue('originLng', 8.4010293));
++  const [destinationLat, setDestinationLat] = useState(() => getStoredValue('destinationLat', 40.6973709));
++  const [destinationLng, setDestinationLng] = useState(() => getStoredValue('destinationLng', -74.144487));
++  const [originLabel, setOriginLabel] = useState(() => getStoredValue('originLabel', 'Karlsruhe'));
++  const [destinationLabel, setDestinationLabel] = useState(() => getStoredValue('destinationLabel', 'New York'));
++  const [originColor, setOriginColor] = useState(() => getStoredValue('originColor', '#0000ff'));
++  const [destinationColor, setDestinationColor] = useState(() => getStoredValue('destinationColor', '#ff0000'));
++  const [arcColor, setArcColor] = useState(() => getStoredValue('arcColor', '#00ff00'));
++  const [arcWidth, setArcWidth] = useState(() => getStoredValue('arcWidth', 2));
++  const [arcDashArray, setArcDashArray] = useState(() => getStoredValue('arcDashArray', 5));
++  const [curveHeight, setCurveHeight] = useState(() => getStoredValue('curveHeight', 0.5));
+ 
+   // Icon states
+-  const [originIconSize, setOriginIconSize] = useState(10);
+-  const [destinationIconSize, setDestinationIconSize] = useState(10);
+-  const [travelModeIcon, setTravelModeIcon] = useState('FaPlane');
+-  const [travelIconColor, setTravelIconColor] = useState('#ff6600');
+-  const [travelIconSize, setTravelIconSize] = useState(10);
+-  const [originIcon, setOriginIcon] = useState('FaMapMarkerAlt');
+-  const [destinationIcon, setDestinationIcon] = useState('FaFlagCheckered');
+-  const [travelIconRotation, setTravelIconRotation] = useState(0);
+-  
++  const [originIconSize, setOriginIconSize] = useState(() => getStoredValue('originIconSize', 10));
++  const [destinationIconSize, setDestinationIconSize] = useState(() => getStoredValue('destinationIconSize', 10));
++  const [travelModeIcon, setTravelModeIcon] = useState(() => getStoredValue('travelModeIcon', 'FaPlane'));
++  const [travelIconColor, setTravelIconColor] = useState(() => getStoredValue('travelIconColor', '#ff6600'));
++  const [travelIconSize, setTravelIconSize] = useState(() => getStoredValue('travelIconSize', 10));
++  const [originIcon, setOriginIcon] = useState(() => getStoredValue('originIcon', 'FaMapMarkerAlt'));
++  const [destinationIcon, setDestinationIcon] = useState(() => getStoredValue('destinationIcon', 'FaFlagCheckered'));
++  const [travelIconRotation, setTravelIconRotation] = useState(() => getStoredValue('travelIconRotation', 0));
++
+   // Label states
+-  const [labelSize, setLabelSize] = useState(12);
+-  const [labelPosition, setLabelPosition] = useState('top');
++  const [labelSize, setLabelSize] = useState(() => getStoredValue('labelSize', 12));
++  const [labelPosition, setLabelPosition] = useState(() => getStoredValue('labelPosition', 'top'));
++
++  // Theme state: 'light' or 'dark'
++  const [theme, setTheme] = useState(() => getStoredValue('theme', 'light'));
++
++  // Crop/selection state (don't persist crop bounds as they depend on screen size)
++  const [cropEnabled, setCropEnabled] = useState(false);
++  const [cropBounds, setCropBounds] = useState({ x: 100, y: 100, width: 400, height: 300 });
++  const [cropAspectRatio, setCropAspectRatio] = useState(() => getStoredValue('cropAspectRatio', 'free'));
++
++  // Animation state
++  const [animations, setAnimations] = useState(() => getStoredValue('animations', {
++    dashFlow: false,
++    drawLine: false,
++    travelingIcon: false,
++    pulsingMarkers: false,
++  }));
++
++  // Color palette state
++  const [colorPalette, setColorPalette] = useState(() => getStoredValue('colorPalette', 'custom'));
++  const [mapStyle, setMapStyle] = useState(() => getStoredValue('mapStyle', 'default'));
++
++  // Font state
++  const [labelFont, setLabelFont] = useState(() => getStoredValue('labelFont', 'sans-serif'));
+ 
+   const svgRef = useRef(null); // Ref to access the SVG element
+ 
+-  const handleImageUpload = (e) => {
++  // Save all settings to localStorage whenever they change
++  useEffect(() => {
++    const settings = {
++      originLat, originLng, destinationLat, destinationLng,
++      originLabel, destinationLabel,
++      originColor, destinationColor, arcColor,
++      arcWidth, arcDashArray, curveHeight,
++      originIconSize, destinationIconSize,
++      travelModeIcon, travelIconColor, travelIconSize,
++      originIcon, destinationIcon, travelIconRotation,
++      labelSize, labelPosition, theme, cropAspectRatio,
++      animations, colorPalette, mapStyle, labelFont
++    };
++
++    Object.entries(settings).forEach(([key, value]) => {
++      try {
++        localStorage.setItem(`flightPath_${key}`, JSON.stringify(value));
++      } catch (e) {
++        console.warn(`Error saving ${key} to localStorage:`, e);
++      }
++    });
++  }, [
++    originLat, originLng, destinationLat, destinationLng,
++    originLabel, destinationLabel,
++    originColor, destinationColor, arcColor,
++    arcWidth, arcDashArray, curveHeight,
++    originIconSize, destinationIconSize,
++    travelModeIcon, travelIconColor, travelIconSize,
++    originIcon, destinationIcon, travelIconRotation,
++    labelSize, labelPosition, theme, cropAspectRatio,
++    animations, colorPalette, mapStyle, labelFont
++  ]);
++
++  const extractGPSFromImage = (file, onSuccess) => {
++    const reader = new FileReader();
++    reader.onload = () => {
++      EXIF.getData(file, function () {
++        const lat = EXIF.getTag(this, 'GPSLatitude');
++        const lng = EXIF.getTag(this, 'GPSLongitude');
++        const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
++        const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
++
++        if (lat && lng) {
++          const decimalLat =
++            (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === 'S' ? -1 : 1);
++          const decimalLng =
++            (lng[0] + lng[1] / 60 + lng[2] / 3600) * (lngRef === 'W' ? -1 : 1);
++          onSuccess(decimalLat, decimalLng);
++        } else {
++          alert('No GPS data found in the image.');
++        }
++      });
++    };
++    reader.readAsArrayBuffer(file);
++  };
++
++  const handleOriginImageUpload = (e) => {
++    const file = e.target.files[0];
++    if (file) {
++      extractGPSFromImage(file, (lat, lng) => {
++        setOriginLat(lat);
++        setOriginLng(lng);
++      });
++    }
++  };
++
++  const handleDestinationImageUpload = (e) => {
+     const file = e.target.files[0];
+     if (file) {
+-      const reader = new FileReader();
+-      reader.onload = () => {
+-        EXIF.getData(file, function () {
+-          const lat = EXIF.getTag(this, 'GPSLatitude');
+-          const lng = EXIF.getTag(this, 'GPSLongitude');
+-          const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+-          const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
+-
+-          if (lat && lng) {
+-            const decimalLat =
+-              (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === 'S' ? -1 : 1);
+-            const decimalLng =
+-              (lng[0] + lng[1] / 60 + lng[2] / 3600) * (lngRef === 'W' ? -1 : 1);
+-
+-            setDestinationLat(decimalLat);
+-            setDestinationLng(decimalLng);
+-          } else {
+-            alert('No GPS data found in the image.');
+-          }
+-        });
+-      };
+-      reader.readAsArrayBuffer(file);
++      extractGPSFromImage(file, (lat, lng) => {
++        setDestinationLat(lat);
++        setDestinationLng(lng);
++      });
+     }
+   };
+ 
+   const handleExport = () => {
+-    const svgElement = svgRef.current.querySelector('svg');;
++    const svgElement = svgRef.current.querySelector('svg');
+     if (!svgElement) {
+       alert('SVG element not found.');
+       return;
+     }
+ 
+-    // the svg is the first child of the div
+-    // so we can just download the innerHTML
+-    // and save it as an svg file
++    // Clone the SVG to avoid modifying the original
++    const clonedSvg = svgElement.cloneNode(true);
++
++    // If crop is enabled, transform screen coordinates to SVG coordinates
++    if (cropEnabled) {
++      // Get the SVG's current viewBox and dimensions
++      const svgRect = svgElement.getBoundingClientRect();
++      const viewBox = svgElement.viewBox.baseVal;
++
++      // Calculate scale factors between screen pixels and SVG units
++      const scaleX = viewBox.width / svgRect.width;
++      const scaleY = viewBox.height / svgRect.height;
+ 
++      // Transform crop bounds from screen coordinates to SVG coordinates
++      const svgCropX = viewBox.x + (cropBounds.x * scaleX);
++      const svgCropY = viewBox.y + (cropBounds.y * scaleY);
++      const svgCropWidth = cropBounds.width * scaleX;
++      const svgCropHeight = cropBounds.height * scaleY;
+ 
+-    
++      clonedSvg.setAttribute('viewBox', `${svgCropX} ${svgCropY} ${svgCropWidth} ${svgCropHeight}`);
++      clonedSvg.setAttribute('width', cropBounds.width);
++      clonedSvg.setAttribute('height', cropBounds.height);
++    }
+ 
+     const serializer = new XMLSerializer();
+-    const svgString = serializer.serializeToString(svgElement);
++    const svgString = serializer.serializeToString(clonedSvg);
+ 
+     const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+     const url = URL.createObjectURL(blob);
+@@ -85,29 +187,235 @@ function App() {
+     link.href = url;
+ 
+     // Generate file name
+-
+-    // add origin
+     let fileName = Array
+       .from(originLabel)
+       .filter((c) => c.match(/[a-zA-Z0-9]/))
+       .join('');
+     fileName += '-';
+ 
+-    // add destination
+     fileName += Array
+       .from(destinationLabel)
+       .filter((c) => c.match(/[a-zA-Z0-9]/))
+       .join('');
+ 
+-    // add travel mode
+     fileName += '-by-';
+     fileName += travelModeIcon.replace('Fa', '');
+ 
+     link.download = `${fileName}.svg`;
++    link.click();
+ 
++    URL.revokeObjectURL(url);
++  };
+ 
+-    link.click();
++  const handleExportZip = async () => {
++    const svgElement = svgRef.current.querySelector('svg');
++    if (!svgElement) {
++      alert('SVG element not found.');
++      return;
++    }
++
++    // Generate base file name
++    let baseName = Array.from(originLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('');
++    baseName += '-';
++    baseName += Array.from(destinationLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('');
++    baseName += '-by-' + travelModeIcon.replace('Fa', '');
++
++    // Generate unique prefix for CSS classes (lowercase, alphanumeric only)
++    const uniquePrefix = `fp-${Array.from(originLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('').toLowerCase().slice(0, 4)}-${Array.from(destinationLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('').toLowerCase().slice(0, 4)}`;
++
++    // Clone and prepare SVG
++    const clonedSvg = svgElement.cloneNode(true);
++
++    // Handle crop if enabled
++    if (cropEnabled) {
++      const svgRect = svgElement.getBoundingClientRect();
++      const viewBox = svgElement.viewBox.baseVal;
++      const scaleX = viewBox.width / svgRect.width;
++      const scaleY = viewBox.height / svgRect.height;
++      const svgCropX = viewBox.x + (cropBounds.x * scaleX);
++      const svgCropY = viewBox.y + (cropBounds.y * scaleY);
++      const svgCropWidth = cropBounds.width * scaleX;
++      const svgCropHeight = cropBounds.height * scaleY;
++      clonedSvg.setAttribute('viewBox', `${svgCropX} ${svgCropY} ${svgCropWidth} ${svgCropHeight}`);
++      clonedSvg.setAttribute('width', cropBounds.width);
++      clonedSvg.setAttribute('height', cropBounds.height);
++    }
++
++    // Add animation classes to SVG elements (with unique prefix)
++    const arcPath = clonedSvg.querySelector('path[stroke][fill="none"]');
++    if (arcPath) {
++      if (animations.dashFlow) arcPath.classList.add(`${uniquePrefix}-arc-dash-flow`);
++      if (animations.drawLine) arcPath.classList.add(`${uniquePrefix}-arc-draw-line`);
++    }
++
++    // Add class to markers for pulsing
++    const markers = clonedSvg.querySelectorAll('g[transform]');
++    if (animations.pulsingMarkers) {
++      markers.forEach((m, i) => m.classList.add(`${uniquePrefix}-marker-pulse`, `${uniquePrefix}-marker-${i}`));
++    }
++
++    // Add link to external CSS
++    const styleLink = document.createElementNS('http://www.w3.org/2000/svg', 'style');
++    styleLink.textContent = '@import url("animations.css");';
++    clonedSvg.insertBefore(styleLink, clonedSvg.firstChild);
+ 
++    const serializer = new XMLSerializer();
++    const svgString = serializer.serializeToString(clonedSvg);
++
++    // Generate CSS file content with unique prefixed names
++    const cssContent = `/* Flight Path Animations */
++/* Generated by Dynamic Travel Path Visualizer */
++/* Route: ${originLabel} to ${destinationLabel} */
++/* Unique prefix: ${uniquePrefix} */
++
++/* Flowing dashes animation */
++@keyframes ${uniquePrefix}-dashFlow {
++  from { stroke-dashoffset: 0; }
++  to { stroke-dashoffset: -40; }
++}
++
++.${uniquePrefix}-arc-dash-flow {
++  animation: ${uniquePrefix}-dashFlow 1s linear infinite;
++}
++
++/* Draw line animation */
++@keyframes ${uniquePrefix}-drawLine {
++  from { stroke-dashoffset: 2000; }
++  to { stroke-dashoffset: 0; }
++}
++
++.${uniquePrefix}-arc-draw-line {
++  stroke-dasharray: 2000;
++  animation: ${uniquePrefix}-drawLine 2s ease-out forwards;
++}
++
++/* Pulsing markers animation */
++@keyframes ${uniquePrefix}-pulse {
++  0%, 100% { transform: scale(1); opacity: 1; }
++  50% { transform: scale(1.2); opacity: 0.8; }
++}
++
++.${uniquePrefix}-marker-pulse {
++  transform-origin: center;
++  transform-box: fill-box;
++  animation: ${uniquePrefix}-pulse 1.5s ease-in-out infinite;
++}
++
++.${uniquePrefix}-marker-1 {
++  animation-delay: 0.75s;
++}
++
++/* Traveling icon animation */
++@keyframes ${uniquePrefix}-travelIcon {
++  0% { offset-distance: 0%; }
++  100% { offset-distance: 100%; }
++}
++
++.${uniquePrefix}-travel-icon-animated {
++  offset-rotate: 0deg;
++  animation: ${uniquePrefix}-travelIcon 3s ease-in-out infinite;
++}
++`;
++
++    // Generate HTML preview file
++    const htmlContent = `<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1.0">
++  <title>${baseName} - Flight Path</title>
++  <link rel="stylesheet" href="animations.css">
++  <style>
++    body {
++      margin: 0;
++      display: flex;
++      justify-content: center;
++      align-items: center;
++      min-height: 100vh;
++      background: #f0f0f0;
++    }
++    .container {
++      max-width: 100%;
++      padding: 20px;
++    }
++    object, img {
++      max-width: 100%;
++      height: auto;
++    }
++  </style>
++</head>
++<body>
++  <div class="container">
++    <!-- Use object tag to enable CSS animations -->
++    <object type="image/svg+xml" data="${baseName}.svg" width="100%">
++      <!-- Fallback to img if object doesn't work -->
++      <img src="${baseName}.svg" alt="Flight path from ${originLabel} to ${destinationLabel}">
++    </object>
++  </div>
++</body>
++</html>
++`;
++
++    // Generate README
++    const readmeContent = `# ${baseName} Flight Path
++
++## Files Included
++- \`${baseName}.svg\` - The flight path SVG graphic
++- \`animations.css\` - CSS animations for the SVG
++- \`preview.html\` - HTML file to preview the animated SVG
++
++## CSS Class Naming
++All CSS classes and keyframe animations use a unique prefix to avoid conflicts when embedding multiple flight paths on the same page.
++
++**Unique prefix for this export:** \`${uniquePrefix}\`
++
++Example classes:
++- \`${uniquePrefix}-arc-dash-flow\`
++- \`${uniquePrefix}-marker-pulse\`
++- \`${uniquePrefix}-travel-icon-animated\`
++
++## Usage
++
++### Option 1: Use the HTML preview
++Simply open \`preview.html\` in a web browser to see the animated flight path.
++
++### Option 2: Embed in your website
++1. Copy both \`${baseName}.svg\` and \`animations.css\` to your website
++2. Link the CSS in your HTML:
++   \`\`\`html
++   <link rel="stylesheet" href="animations.css">
++   \`\`\`
++3. Embed the SVG using an object tag (required for CSS animations):
++   \`\`\`html
++   <object type="image/svg+xml" data="${baseName}.svg" width="800"></object>
++   \`\`\`
++
++### Option 3: Inline SVG
++For full animation support, you can also inline the SVG directly in your HTML and include the CSS.
++
++### Embedding Multiple Flight Paths
++Each export has unique CSS class names, so you can safely include multiple flight path CSS files on the same page without conflicts.
++
++## Animations Included
++${animations.dashFlow ? '- ✅ Flowing dashes along the path\n' : ''}${animations.drawLine ? '- ✅ Line drawing effect\n' : ''}${animations.pulsingMarkers ? '- ✅ Pulsing origin/destination markers\n' : ''}${animations.travelingIcon ? '- ✅ Traveling icon along path\n' : ''}
++## Generated with
++Dynamic Travel Path Visualizer
++`;
++
++    // Create ZIP file
++    const zip = new JSZip();
++    zip.file(`${baseName}.svg`, svgString);
++    zip.file('animations.css', cssContent);
++    zip.file('preview.html', htmlContent);
++    zip.file('README.md', readmeContent);
++
++    // Generate and download
++    const zipBlob = await zip.generateAsync({ type: 'blob' });
++    const url = URL.createObjectURL(zipBlob);
++    const link = document.createElement('a');
++    link.href = url;
++    link.download = `${baseName}.zip`;
++    link.click();
+     URL.revokeObjectURL(url);
+   };
+ 
+@@ -138,8 +446,10 @@ function App() {
+         setArcDashArray={setArcDashArray}
+         curveHeight={curveHeight}
+         setCurveHeight={setCurveHeight}
+-        handleImageUpload={handleImageUpload}
++        handleOriginImageUpload={handleOriginImageUpload}
++        handleDestinationImageUpload={handleDestinationImageUpload}
+         handleExport={handleExport}
++        handleExportZip={handleExportZip}
+         originIconSize={originIconSize}
+         setOriginIconSize={setOriginIconSize}
+         destinationIconSize={destinationIconSize}
+@@ -160,6 +470,22 @@ function App() {
+         setLabelSize={setLabelSize}
+         labelPosition={labelPosition}
+         setLabelPosition={setLabelPosition}
++        theme={theme}
++        setTheme={setTheme}
++        cropEnabled={cropEnabled}
++        setCropEnabled={setCropEnabled}
++        cropBounds={cropBounds}
++        setCropBounds={setCropBounds}
++        cropAspectRatio={cropAspectRatio}
++        setCropAspectRatio={setCropAspectRatio}
++        animations={animations}
++        setAnimations={setAnimations}
++        colorPalette={colorPalette}
++        setColorPalette={setColorPalette}
++        mapStyle={mapStyle}
++        setMapStyle={setMapStyle}
++        labelFont={labelFont}
++        setLabelFont={setLabelFont}
+       />
+       <div style={{ flex: 1 }}>
+         <FlightMap
+@@ -184,6 +510,14 @@ function App() {
+           destinationLabel={destinationLabel}
+           labelSize={labelSize}
+           labelPosition={labelPosition}
++          theme={theme}
++          cropEnabled={cropEnabled}
++          cropBounds={cropBounds}
++          setCropBounds={setCropBounds}
++          cropAspectRatio={cropAspectRatio}
++          animations={animations}
++          mapStyle={mapStyle}
++          labelFont={labelFont}
+         />
+       </div>
+     </div>
+diff --git a/src/components/FlightMap.js b/src/components/FlightMap.js
+index 644262e..197d8b1 100644
+--- a/src/components/FlightMap.js
++++ b/src/components/FlightMap.js
+@@ -1,4 +1,4 @@
+-import React, { forwardRef } from 'react';
++import React, { forwardRef, useState, useCallback } from 'react';
+ import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
+ import {
+     FaPlane,
+@@ -54,9 +54,137 @@ const FlightMap = forwardRef(
+             destinationLabel,
+             labelSize,
+             labelPosition,
++            theme = 'light',
++            cropEnabled = false,
++            cropBounds = { x: 100, y: 100, width: 400, height: 300 },
++            setCropBounds,
++            cropAspectRatio = 'free',
++            animations = {},
++            mapStyle = 'default',
++            labelFont = 'sans-serif',
+         },
+         ref
+     ) => {
++        const [isDragging, setIsDragging] = useState(false);
++        const [isResizing, setIsResizing] = useState(false);
++        const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
++        const localRef = React.useRef(null);
++
++        // Combine forwarded ref with local ref
++        const setRefs = React.useCallback((node) => {
++            localRef.current = node;
++            if (typeof ref === 'function') {
++                ref(node);
++            } else if (ref) {
++                ref.current = node;
++            }
++        }, [ref]);
++
++        // Parse aspect ratio string to number
++        const getAspectRatioValue = (ratio) => {
++            if (ratio === 'free') return null;
++            const [w, h] = ratio.split(':').map(Number);
++            return w / h;
++        };
++
++        const handleCropMouseDown = useCallback((e) => {
++            if (!cropEnabled || !localRef.current) return;
++            e.preventDefault();
++            const rect = localRef.current.getBoundingClientRect();
++            const mouseX = e.clientX - rect.left;
++            const mouseY = e.clientY - rect.top;
++            setDragStart({ x: mouseX - cropBounds.x, y: mouseY - cropBounds.y });
++            setIsDragging(true);
++        }, [cropEnabled, cropBounds.x, cropBounds.y]);
++
++        const handleResizeMouseDown = useCallback((e) => {
++            e.stopPropagation();
++            e.preventDefault();
++            if (!cropEnabled) return;
++            setIsResizing(true);
++        }, [cropEnabled]);
++
++        const handleMouseMove = useCallback((e) => {
++            if (!cropEnabled || (!isDragging && !isResizing) || !localRef.current) return;
++            const rect = localRef.current.getBoundingClientRect();
++            const x = e.clientX - rect.left;
++            const y = e.clientY - rect.top;
++
++            if (isDragging) {
++                setCropBounds(prev => ({
++                    ...prev,
++                    x: Math.max(0, x - dragStart.x),
++                    y: Math.max(0, y - dragStart.y),
++                }));
++            } else if (isResizing) {
++                const aspectRatio = getAspectRatioValue(cropAspectRatio);
++                let newWidth = Math.max(50, x - cropBounds.x);
++                let newHeight = Math.max(50, y - cropBounds.y);
++
++                if (aspectRatio) {
++                    // Maintain aspect ratio - use width as the driver
++                    newHeight = newWidth / aspectRatio;
++                }
++
++                setCropBounds(prev => ({
++                    ...prev,
++                    width: newWidth,
++                    height: newHeight,
++                }));
++            }
++        }, [cropEnabled, isDragging, isResizing, dragStart, setCropBounds, cropAspectRatio, cropBounds.x, cropBounds.y]);
++
++        const handleMouseUp = useCallback(() => {
++            setIsDragging(false);
++            setIsResizing(false);
++        }, []);
++        // Map style colors
++        const mapStyles = {
++            default: {
++                light: { background: '#FFFFFF', geographyFill: '#DDD', geographyStroke: '#FFF', labelColor: '#000000' },
++                dark: { background: '#1a1a1a', geographyFill: '#333', geographyStroke: '#222', labelColor: '#FFFFFF' },
++            },
++            minimal: {
++                light: { background: '#FAFAFA', geographyFill: '#E8E8E8', geographyStroke: '#FAFAFA', labelColor: '#333333' },
++                dark: { background: '#111111', geographyFill: '#1a1a1a', geographyStroke: '#111111', labelColor: '#CCCCCC' },
++            },
++            satellite: {
++                light: { background: '#1a3a5c', geographyFill: '#2d5a3f', geographyStroke: '#1a3a5c', labelColor: '#FFFFFF' },
++                dark: { background: '#0d1f2d', geographyFill: '#1a3a2a', geographyStroke: '#0d1f2d', labelColor: '#FFFFFF' },
++            },
++            vintage: {
++                light: { background: '#f5e6d3', geographyFill: '#d4c4a8', geographyStroke: '#f5e6d3', labelColor: '#5c4a32' },
++                dark: { background: '#2a2520', geographyFill: '#3d362d', geographyStroke: '#2a2520', labelColor: '#d4c4a8' },
++            },
++            blueprint: {
++                light: { background: '#1e3a5f', geographyFill: '#2a4a6f', geographyStroke: '#3a6a9f', labelColor: '#FFFFFF' },
++                dark: { background: '#0a1929', geographyFill: '#132f4c', geographyStroke: '#1e4976', labelColor: '#66b2ff' },
++            },
++        };
++        const colors = mapStyles[mapStyle]?.[theme] || mapStyles.default[theme] || mapStyles.default.light;
++
++        // Animation styles
++        const animationStyles = `
++            @keyframes dashFlow {
++                from { stroke-dashoffset: 0; }
++                to { stroke-dashoffset: -40; }
++            }
++            @keyframes drawLine {
++                from { stroke-dashoffset: 1000; }
++                to { stroke-dashoffset: 0; }
++            }
++            @keyframes pulse {
++                0%, 100% { transform: scale(1); opacity: 1; }
++                50% { transform: scale(1.3); opacity: 0.7; }
++            }
++            @keyframes travelIcon {
++                0% { offset-distance: 0%; }
++                100% { offset-distance: 100%; }
++            }
++            .travel-icon-animated {
++                offset-rotate: 0deg;
++            }
++        `;
+         const calculateArcPath = (projection, start, end) => {
+             const start2D = projection([start.lng, start.lat]);
+             const end2D = projection([end.lng, end.lat]);
+@@ -90,21 +218,35 @@ const FlightMap = forwardRef(
+ 
+ 
+         return (
+-            <div ref={ref} style={{ width: '100%', height: '100%' }}>
+-                <ComposableMap projection="geoMercator" style={{ width: '100%', height: '100%' }}>
++            <div
++                ref={setRefs}
++                style={{ width: '100%', height: '100%', backgroundColor: colors.background, position: 'relative' }}
++                onMouseMove={handleMouseMove}
++                onMouseUp={handleMouseUp}
++                onMouseLeave={handleMouseUp}
++            >
++                <style>{animationStyles}</style>
++                <ComposableMap projection="geoMercator" style={{ width: '100%', height: '100%', backgroundColor: colors.background }}>
+                     <ZoomableGroup>
+                         <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                             {({ geographies, projection }) => (
+                                 <>
+                                     {geographies.map((geo) => (
+-                                        <Geography key={geo.rsmKey} geography={geo} fill="#DDD" stroke="#FFF" />
++                                        <Geography key={geo.rsmKey} geography={geo} fill={colors.geographyFill} stroke={colors.geographyStroke} />
+                                     ))}
+                                     <path
+                                         d={calculateArcPath(projection, startPoint, endPoint)}
+                                         fill="none"
+                                         stroke={arcColor}
+                                         strokeWidth={arcWidth}
+-                                        strokeDasharray={arcDashArray}
++                                        strokeDasharray={animations.drawLine ? '1000' : arcDashArray}
++                                        style={{
++                                            animation: animations.dashFlow
++                                                ? 'dashFlow 1s linear infinite'
++                                                : animations.drawLine
++                                                ? 'drawLine 2s ease-out forwards'
++                                                : 'none',
++                                        }}
+                                     />
+                                     {/* Travel Icon */}
+                                     {(() => {
+@@ -114,20 +256,55 @@ const FlightMap = forwardRef(
+ 
+                                         const iconX = (start2D[0] + end2D[0]) / 2;
+                                         const iconY = (start2D[1] + end2D[1]) / 2 - curveHeight * 50;
++                                        const pathD = calculateArcPath(projection, startPoint, endPoint);
++
++                                        // Calculate tangent angle of the arc at the midpoint
++                                        // For a quadratic Bezier, the tangent at t=0.5 is in the direction from start to end
++                                        const tangentDx = end2D[0] - start2D[0];
++                                        const tangentDy = end2D[1] - start2D[1];
++                                        const angleDeg = (Math.atan2(tangentDy, tangentDx) * 180) / Math.PI;
++
++                                        // Icons that point right by default and can be rotated/flipped
++                                        const canTransform = ['FaPlane', 'FaBicycle', 'FaHorse'].includes(travelModeIcon);
++
++                                        // If angle > 90 or < -90, icon would be upside down, so flip instead
++                                        const needsFlip = Math.abs(angleDeg) > 90;
++
++                                        // Adjust rotation angle when flipped
++                                        const rotationAngle = needsFlip
++                                            ? (angleDeg > 0 ? angleDeg - 180 : angleDeg + 180)
++                                            : angleDeg;
++
++                                        // Build transform: flip first (if needed), then rotate
++                                        let iconTransform = '';
++                                        if (canTransform) {
++                                            if (needsFlip) {
++                                                iconTransform = `scale(-1, 1) rotate(${-rotationAngle})`;
++                                            } else {
++                                                iconTransform = `rotate(${rotationAngle})`;
++                                            }
++                                        }
+ 
+                                         return (
+-                                            <g transform={`translate(${iconX}, ${iconY})`}>
+-                                                <circle
+-                                                    r={travelIconSize * 0.8}
+-                                                    fill={travelIconColor}
+-
+-                                                />
+-                                                {availableIcons[travelModeIcon] &&
+-                                                    React.cloneElement(availableIcons[travelModeIcon], {
+-                                                        size: travelIconSize,
+-                                                        color: 'white',
+-                                                        style: { transform: `translate(-${travelIconSize / 2}px, -${travelIconSize / 2}px)` },
+-                                                    })}
++                                            <g
++                                                style={animations.travelingIcon ? {
++                                                    offsetPath: `path('${pathD}')`,
++                                                    animation: 'travelIcon 3s ease-in-out infinite',
++                                                } : { transform: `translate(${iconX}px, ${iconY}px)` }}
++                                            >
++                                                <g transform={iconTransform}>
++                                                    <circle
++                                                        r={travelIconSize * 0.8}
++                                                        fill={travelIconColor}
++                                                    />
++                                                    <g transform={`translate(${-travelIconSize / 2}, ${-travelIconSize / 2})`}>
++                                                        {availableIcons[travelModeIcon] &&
++                                                            React.cloneElement(availableIcons[travelModeIcon], {
++                                                                size: travelIconSize,
++                                                                color: 'white',
++                                                            })}
++                                                    </g>
++                                                </g>
+                                             </g>
+                                         );
+                                     })()}
+@@ -137,20 +314,20 @@ const FlightMap = forwardRef(
+ 
+                         {/* Origin Marker */}
+                         <Marker coordinates={[startPoint.lng, startPoint.lat]}>
+-                            <g>
++                            <g style={animations.pulsingMarkers ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}}>
+                                 {/* Draw Circle */}
+                                 <circle
+                                     r={originIconSize * 0.8}
+                                     fill={originColor}
+-                                    
+                                 />
+                                 {/* Draw Icon */}
+-                                {availableIcons[originIcon] &&
+-                                    React.cloneElement(availableIcons[originIcon], {
+-                                        size: originIconSize,
+-                                        color: 'white',
+-                                        style: { transform: `translate(-${originIconSize / 2}px, -${originIconSize / 2}px)` },
+-                                    })}
++                                <g transform={`translate(${-originIconSize / 2}, ${-originIconSize / 2})`}>
++                                    {availableIcons[originIcon] &&
++                                        React.cloneElement(availableIcons[originIcon], {
++                                            size: originIconSize,
++                                            color: 'white',
++                                        })}
++                                </g>
+                                 {/* Draw Label */}
+                                 <text
+                                     x={getLabelXOffset(labelPosition, originIconSize)}
+@@ -158,7 +335,8 @@ const FlightMap = forwardRef(
+                                     textAnchor={labelPosition === 'right' ? 'start' : labelPosition === 'left' ? 'end' : 'middle'}
+                                     alignmentBaseline={labelPosition === 'top' || labelPosition === 'bottom' ? 'central' : 'middle'}
+                                     fontSize={labelSize}
+-                                    fill="black"
++                                    fontFamily={labelFont}
++                                    fill={colors.labelColor}
+                                 >
+                                     {originLabel}
+                                 </text>
+@@ -168,26 +346,26 @@ const FlightMap = forwardRef(
+ 
+                         {/* Destination Marker */}
+                         <Marker coordinates={[endPoint.lng, endPoint.lat]}>
+-                            <g>
++                            <g style={animations.pulsingMarkers ? { animation: 'pulse 1.5s ease-in-out infinite', animationDelay: '0.75s' } : {}}>
+                                 <circle
+                                     r={destinationIconSize * 0.8}
+                                     fill={destinationColor}
+-
+                                 />
+-                                {availableIcons[destinationIcon] &&
+-                                    React.cloneElement(availableIcons[destinationIcon], {
+-                                        size: destinationIconSize,
+-                                        color: 'white',
+-                                        style: { transform: `translate(-${destinationIconSize / 2}px, -${destinationIconSize / 2}px)` },
+-                                    })}
++                                <g transform={`translate(${-destinationIconSize / 2}, ${-destinationIconSize / 2})`}>
++                                    {availableIcons[destinationIcon] &&
++                                        React.cloneElement(availableIcons[destinationIcon], {
++                                            size: destinationIconSize,
++                                            color: 'white',
++                                        })}
++                                </g>
+                                 <text
+                                     x={getLabelXOffset(labelPosition, destinationIconSize, labelSize)}
+                                     y={getLabelYOffset(labelPosition, destinationIconSize, labelSize)}
+                                     textAnchor={labelPosition === 'right' ? 'start' : labelPosition === 'left' ? 'end' : 'middle'}
+                                     alignmentBaseline={labelPosition === 'top' || labelPosition === 'bottom' ? 'central' : 'middle'}
+                                     fontSize={labelSize}
+-                                    fill="black"
+-                                
++                                    fontFamily={labelFont}
++                                    fill={colors.labelColor}
+                                 >
+                                     {destinationLabel}
+                                 </text>
+@@ -195,6 +373,66 @@ const FlightMap = forwardRef(
+                         </Marker>
+                     </ZoomableGroup>
+                 </ComposableMap>
++
++                {/* Crop Selection Overlay */}
++                {cropEnabled && (
++                    <div
++                        className="crop-overlay"
++                        style={{
++                            position: 'absolute',
++                            left: cropBounds.x,
++                            top: cropBounds.y,
++                            width: cropBounds.width,
++                            height: cropBounds.height,
++                            border: '2px dashed #3b82f6',
++                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
++                            cursor: isDragging ? 'grabbing' : 'grab',
++                            boxSizing: 'border-box',
++                        }}
++                        onMouseDown={handleCropMouseDown}
++                    >
++                        {/* Resize handle */}
++                        <div
++                            style={{
++                                position: 'absolute',
++                                right: -6,
++                                bottom: -6,
++                                width: 12,
++                                height: 12,
++                                backgroundColor: '#3b82f6',
++                                cursor: 'nwse-resize',
++                                borderRadius: 2,
++                            }}
++                            onMouseDown={handleResizeMouseDown}
++                        />
++                        {/* Size indicator */}
++                        <div
++                            style={{
++                                position: 'absolute',
++                                bottom: 4,
++                                left: 4,
++                                fontSize: 10,
++                                color: '#3b82f6',
++                                fontWeight: 'bold',
++                                backgroundColor: 'rgba(255,255,255,0.8)',
++                                padding: '1px 4px',
++                                borderRadius: 2,
++                            }}
++                        >
++                            {Math.round(cropBounds.width)} x {Math.round(cropBounds.height)}
++                        </div>
++                    </div>
++                )}
++
++                {/* Dark overlay outside crop area */}
++                {cropEnabled && (
++                    <>
++                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: cropBounds.y, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
++                        <div style={{ position: 'absolute', top: cropBounds.y, left: 0, width: cropBounds.x, height: cropBounds.height, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
++                        <div style={{ position: 'absolute', top: cropBounds.y, left: cropBounds.x + cropBounds.width, right: 0, height: cropBounds.height, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
++                        <div style={{ position: 'absolute', top: cropBounds.y + cropBounds.height, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
++                    </>
++                )}
+             </div>
+         );
+     }
+diff --git a/src/components/Sidebar.js b/src/components/Sidebar.js
+index a15032d..3397365 100644
+--- a/src/components/Sidebar.js
++++ b/src/components/Sidebar.js
+@@ -79,46 +79,95 @@ const Sidebar = ({
+     setLabelPosition,
+     curveHeight,
+     setCurveHeight,
+-    handleImageUpload,
++    handleOriginImageUpload,
++    handleDestinationImageUpload,
+     handleExport,
++    handleExportZip,
++    theme,
++    setTheme,
++    cropEnabled,
++    setCropEnabled,
++    cropBounds,
++    setCropBounds,
++    cropAspectRatio,
++    setCropAspectRatio,
++    animations,
++    setAnimations,
++    colorPalette,
++    setColorPalette,
++    mapStyle,
++    setMapStyle,
++    labelFont,
++    setLabelFont,
+ }) => {
++    // Color palette presets
++    const colorPalettes = {
++        custom: null,
++        ocean: { origin: '#0077b6', destination: '#00b4d8', arc: '#90e0ef', travel: '#023e8a' },
++        sunset: { origin: '#ff6b35', destination: '#f7c59f', arc: '#ff9f1c', travel: '#d62828' },
++        forest: { origin: '#2d6a4f', destination: '#40916c', arc: '#74c69d', travel: '#1b4332' },
++        midnight: { origin: '#7400b8', destination: '#5e60ce', arc: '#48bfe3', travel: '#560bad' },
++        earth: { origin: '#bc6c25', destination: '#dda15e', arc: '#606c38', travel: '#283618' },
++        candy: { origin: '#ff006e', destination: '#8338ec', arc: '#3a86ff', travel: '#fb5607' },
++    };
++
++    const applyColorPalette = (paletteName) => {
++        setColorPalette(paletteName);
++        const palette = colorPalettes[paletteName];
++        if (palette) {
++            setOriginColor(palette.origin);
++            setDestinationColor(palette.destination);
++            setArcColor(palette.arc);
++            setTravelIconColor(palette.travel);
++        }
++    };
++    const isDark = theme === 'dark';
+     return (
+-        <div className="w-72 p-2 bg-gray-100 border-r border-gray-300 overflow-y-auto">
+-            <h2 className="text-lg font-bold text-gray-800 mb-2">Map Controls</h2>
++        <div className={`w-72 p-2 border-r overflow-y-auto ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-100 border-gray-300'}`}>
++            {/* Theme Toggle */}
++            <div className="mb-4 flex items-center justify-between">
++                <h2 className={`text-lg font-bold ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>Map Controls</h2>
++                <button
++                    onClick={() => setTheme(isDark ? 'light' : 'dark')}
++                    className={`px-3 py-1 rounded text-sm font-medium ${isDark ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
++                >
++                    {isDark ? 'Light' : 'Dark'}
++                </button>
++            </div>
+ 
+             {/* Origin Point */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Origin Point</h3>
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Origin Point</h3>
+                 <div className="grid grid-cols-2 gap-2">
+                     <label>
+-                        <span className="text-xs text-gray-600">Lat</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lat</span>
+                         <input
+                             type="number"
+                             value={originLat}
+                             onChange={(e) => setOriginLat(parseFloat(e.target.value))}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Lon</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lon</span>
+                         <input
+                             type="number"
+                             value={originLng}
+                             onChange={(e) => setOriginLng(parseFloat(e.target.value))}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Label</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Label</span>
+                         <input
+                             type="text"
+                             value={originLabel}
+                             onChange={(e) => setOriginLabel(e.target.value)}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Color</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Color</span>
+                         <input
+                             type="color"
+                             value={originColor}
+@@ -127,22 +176,21 @@ const Sidebar = ({
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Icon</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon</span>
+                         <select
+                             value={originIcon}
+                             onChange={(e) => setOriginIcon(e.target.value)}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         >
+                             {Object.keys(availableIcons).map((key) => (
+                                 <option key={key} value={key}>
+-                                    {key.replace('Fa', '')} {/* Display without 'Fa' */}
++                                    {key.replace('Fa', '')}
+                                 </option>
+                             ))}
+                         </select>
+-
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Icon Size ({originIconSize})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon Size ({originIconSize})</span>
+                         <input
+                             type="range"
+                             min="2"
+@@ -152,42 +200,51 @@ const Sidebar = ({
+                             className="w-full"
+                         />
+                     </label>
++                    <label className={`col-span-2 block text-center py-1 px-2 rounded cursor-pointer text-xs ${isDark ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
++                        Upload Photo for Origin
++                        <input
++                            type="file"
++                            accept="image/*"
++                            onChange={handleOriginImageUpload}
++                            className="hidden"
++                        />
++                    </label>
+                 </div>
+             </div>
+ 
+             {/* Destination Point */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Destination Point</h3>
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Destination Point</h3>
+                 <div className="grid grid-cols-2 gap-2">
+                     <label>
+-                        <span className="text-xs text-gray-600">Lat</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lat</span>
+                         <input
+                             type="number"
+                             value={destinationLat}
+                             onChange={(e) => setDestinationLat(parseFloat(e.target.value))}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Lon</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Lon</span>
+                         <input
+                             type="number"
+                             value={destinationLng}
+                             onChange={(e) => setDestinationLng(parseFloat(e.target.value))}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Label</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Label</span>
+                         <input
+                             type="text"
+                             value={destinationLabel}
+                             onChange={(e) => setDestinationLabel(e.target.value)}
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Color</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Color</span>
+                         <input
+                             type="color"
+                             value={destinationColor}
+@@ -196,21 +253,21 @@ const Sidebar = ({
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Icon</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon</span>
+                         <select
+                             value={destinationIcon}
+-                            onChange={(e) => setDestinationIcon(e.target.value)} // Use setDestinationIcon here
+-                            className="w-full px-2 py-1 border rounded text-sm"
++                            onChange={(e) => setDestinationIcon(e.target.value)}
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                         >
+                             {Object.keys(availableIcons).map((key) => (
+                                 <option key={key} value={key}>
+-                                    {key.replace('Fa', '')} {/* Display without 'Fa' */}
++                                    {key.replace('Fa', '')}
+                                 </option>
+                             ))}
+                         </select>
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Icon Size ({destinationIconSize})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Icon Size ({destinationIconSize})</span>
+                         <input
+                             type="range"
+                             min="2"
+@@ -220,18 +277,27 @@ const Sidebar = ({
+                             className="w-full"
+                         />
+                     </label>
++                    <label className={`col-span-2 block text-center py-1 px-2 rounded cursor-pointer text-xs ${isDark ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
++                        Upload Photo for Destination
++                        <input
++                            type="file"
++                            accept="image/*"
++                            onChange={handleDestinationImageUpload}
++                            className="hidden"
++                        />
++                    </label>
+                 </div>
+             </div>
+ 
+             {/* Travel Mode */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Travel Mode</h3>
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Travel Mode</h3>
+                 <div className="flex items-center gap-2">
+                     {/* Icon Dropdown */}
+                     <select
+                         value={travelModeIcon}
+                         onChange={(e) => setTravelModeIcon(e.target.value)}
+-                        className="w-24 px-2 py-1 border rounded text-sm"
++                        className={`w-24 px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                     >
+                         <option value="">No Icon</option>
+                         {Object.keys(availableTravelModes).map((key) => (
+@@ -253,7 +319,7 @@ const Sidebar = ({
+ 
+                     {/* Icon Size Slider */}
+                     <label className="flex items-center">
+-                        <span className="text-xs text-gray-600">Size ({travelIconSize})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Size ({travelIconSize})</span>
+                         <input
+                             type="range"
+                             min="2"
+@@ -268,10 +334,10 @@ const Sidebar = ({
+ 
+             {/* Arc Styling */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Arc Styling</h3>
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Arc Styling</h3>
+                 <div className="grid grid-cols-2 gap-2">
+                     <label>
+-                        <span className="text-xs text-gray-600">Curve Height ({curveHeight})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Curve Height ({curveHeight})</span>
+                         <input
+                             type="range"
+                             min="0"
+@@ -283,7 +349,7 @@ const Sidebar = ({
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Arc Width ({arcWidth})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Arc Width ({arcWidth})</span>
+                         <input
+                             type="range"
+                             min="1"
+@@ -294,7 +360,7 @@ const Sidebar = ({
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Dash Array ({arcDashArray})</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Dash Array ({arcDashArray})</span>
+                         <input
+                             type="range"
+                             min="1"
+@@ -305,7 +371,7 @@ const Sidebar = ({
+                         />
+                     </label>
+                     <label>
+-                        <span className="text-xs text-gray-600">Arc Color</span>
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Arc Color</span>
+                         <input
+                             type="color"
+                             value={arcColor}
+@@ -318,9 +384,9 @@ const Sidebar = ({
+ 
+             {/* Label Options */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Label Options</h3>
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Label Options</h3>
+                 <label>
+-                    <span className="text-xs text-gray-600">Font Size ({labelSize})</span>
++                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Font Size ({labelSize})</span>
+                     <input
+                         type="range"
+                         min="2"
+@@ -331,37 +397,177 @@ const Sidebar = ({
+                     />
+                 </label>
+                 <label>
+-                    <span className="text-xs text-gray-600">Position</span>
++                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Position</span>
+                     <select
+                         value={labelPosition}
+                         onChange={(e) => setLabelPosition(e.target.value)}
+-                        className="w-full px-2 py-1 border rounded text-sm"
++                        className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                     >
+                         <option value="top">Top</option>
+                         <option value="right">Right</option>
+                         <option value="bottom">Bottom</option>
+                     </select>
+                 </label>
++                <label>
++                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Font</span>
++                    <select
++                        value={labelFont}
++                        onChange={(e) => setLabelFont(e.target.value)}
++                        className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
++                    >
++                        <option value="sans-serif">Sans-serif</option>
++                        <option value="serif">Serif</option>
++                        <option value="monospace">Monospace</option>
++                        <option value="Georgia, serif">Georgia</option>
++                        <option value="'Times New Roman', serif">Times New Roman</option>
++                        <option value="Arial, sans-serif">Arial</option>
++                        <option value="'Courier New', monospace">Courier New</option>
++                        <option value="Verdana, sans-serif">Verdana</option>
++                        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
++                        <option value="Impact, sans-serif">Impact</option>
++                    </select>
++                </label>
++            </div>
++
++            {/* Animations Section */}
++            <div className="mb-4">
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Animations</h3>
++                <div className="space-y-1">
++                    <label className="flex items-center gap-2 cursor-pointer">
++                        <input
++                            type="checkbox"
++                            checked={animations.dashFlow}
++                            onChange={(e) => setAnimations(prev => ({ ...prev, dashFlow: e.target.checked, drawLine: false }))}
++                            className="w-3 h-3"
++                        />
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Flowing dashes</span>
++                    </label>
++                    <label className="flex items-center gap-2 cursor-pointer">
++                        <input
++                            type="checkbox"
++                            checked={animations.drawLine}
++                            onChange={(e) => setAnimations(prev => ({ ...prev, drawLine: e.target.checked, dashFlow: false }))}
++                            className="w-3 h-3"
++                        />
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Draw line effect</span>
++                    </label>
++                    <label className="flex items-center gap-2 cursor-pointer">
++                        <input
++                            type="checkbox"
++                            checked={animations.travelingIcon}
++                            onChange={(e) => setAnimations(prev => ({ ...prev, travelingIcon: e.target.checked }))}
++                            className="w-3 h-3"
++                        />
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Traveling icon</span>
++                    </label>
++                    <label className="flex items-center gap-2 cursor-pointer">
++                        <input
++                            type="checkbox"
++                            checked={animations.pulsingMarkers}
++                            onChange={(e) => setAnimations(prev => ({ ...prev, pulsingMarkers: e.target.checked }))}
++                            className="w-3 h-3"
++                        />
++                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Pulsing markers</span>
++                    </label>
++                </div>
++            </div>
++
++            {/* Color Palette Section */}
++            <div className="mb-4">
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Color Palette</h3>
++                <select
++                    value={colorPalette}
++                    onChange={(e) => applyColorPalette(e.target.value)}
++                    className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
++                >
++                    <option value="custom">Custom</option>
++                    <option value="ocean">Ocean</option>
++                    <option value="sunset">Sunset</option>
++                    <option value="forest">Forest</option>
++                    <option value="midnight">Midnight</option>
++                    <option value="earth">Earth</option>
++                    <option value="candy">Candy</option>
++                </select>
+             </div>
+ 
+-            {/* Image Upload */}
++            {/* Map Style Section */}
+             <div className="mb-4">
+-                <h3 className="text-md font-semibold text-gray-700 mb-1">Image Upload</h3>
+-                <input
+-                    type="file"
+-                    accept="image/*"
+-                    onChange={handleImageUpload}
+-                    className="w-full text-xs text-gray-600"
+-                />
++                <h3 className={`text-md font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Map Style</h3>
++                <select
++                    value={mapStyle}
++                    onChange={(e) => setMapStyle(e.target.value)}
++                    className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
++                >
++                    <option value="default">Default</option>
++                    <option value="minimal">Minimal</option>
++                    <option value="satellite">Satellite</option>
++                    <option value="vintage">Vintage</option>
++                    <option value="blueprint">Blueprint</option>
++                </select>
+             </div>
+ 
+-            {/* Export Button */}
++            {/* Crop / Export Section */}
+             <div className="mt-4">
++                <h3 className={`text-md font-semibold mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Export Options</h3>
++
++                {/* Crop Toggle */}
++                <label className="flex items-center gap-2 mb-3 cursor-pointer">
++                    <input
++                        type="checkbox"
++                        checked={cropEnabled}
++                        onChange={(e) => setCropEnabled(e.target.checked)}
++                        className="w-4 h-4"
++                    />
++                    <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                        Enable crop selection
++                    </span>
++                </label>
++
++                {/* Aspect Ratio Selector (when crop enabled) */}
++                {cropEnabled && (
++                    <div className="mb-3">
++                        <span className={`text-xs block mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Aspect Ratio</span>
++                        <select
++                            value={cropAspectRatio}
++                            onChange={(e) => {
++                                const newRatio = e.target.value;
++                                setCropAspectRatio(newRatio);
++                                // Apply aspect ratio to current crop bounds
++                                if (newRatio !== 'free') {
++                                    const [w, h] = newRatio.split(':').map(Number);
++                                    const ratio = w / h;
++                                    setCropBounds(prev => ({
++                                        ...prev,
++                                        height: prev.width / ratio
++                                    }));
++                                }
++                            }}
++                            className={`w-full px-2 py-1 border rounded text-sm ${isDark ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
++                        >
++                            <option value="free">Free</option>
++                            <option value="1:1">1:1 (Square)</option>
++                            <option value="16:9">16:9 (Widescreen)</option>
++                            <option value="9:16">9:16 (Portrait)</option>
++                            <option value="4:3">4:3 (Standard)</option>
++                            <option value="3:4">3:4 (Portrait)</option>
++                            <option value="3:2">3:2 (Photo)</option>
++                            <option value="2:3">2:3 (Portrait Photo)</option>
++                            <option value="21:9">21:9 (Ultrawide)</option>
++                        </select>
++                    </div>
++                )}
++
+                 <button
+                     onClick={handleExport}
+-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
++                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mb-2"
++                >
++                    {cropEnabled ? 'Export Cropped SVG' : 'Export SVG'}
++                </button>
++                <button
++                    onClick={handleExportZip}
++                    className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded"
+                 >
+-                    Export Map
++                    Export ZIP (with animations)
+                 </button>
+             </div>
+         </div>

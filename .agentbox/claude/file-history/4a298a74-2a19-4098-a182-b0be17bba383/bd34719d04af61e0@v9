@@ -1,0 +1,421 @@
+import React, { forwardRef, useState, useCallback } from 'react';
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
+import {
+    FaPlane,
+    FaCar,
+    FaTrain,
+    FaHorse,
+    FaMapMarkerAlt,
+    FaFlagCheckered,
+    FaHome,
+    FaBuilding,
+    FaTree,
+    FaMountain,
+    FaUmbrellaBeach,
+    FaBicycle,
+} from 'react-icons/fa';
+
+
+// Icons definition
+const availableIcons = {
+    FaPlane: <FaPlane />,
+    FaCar: <FaCar />,
+    FaTrain: <FaTrain />,
+    FaBicycle: <FaBicycle />,
+    FaHorse: <FaHorse />,
+    FaMapMarkerAlt: <FaMapMarkerAlt />,
+    FaFlagCheckered: <FaFlagCheckered />,
+    FaHome: <FaHome />,
+    FaBuilding: <FaBuilding />,
+    FaTree: <FaTree />,
+    FaMountain: <FaMountain />,
+    FaUmbrellaBeach: <FaUmbrellaBeach />,
+};
+
+const FlightMap = forwardRef(
+    (
+        {
+            startPoint,
+            endPoint,
+            arcColor,
+            arcWidth,
+            arcDashArray,
+            curveHeight,
+            originIconSize,
+            destinationIconSize,
+            travelModeIcon,
+            travelIconColor,
+            travelIconSize,
+            originColor,
+            destinationColor,
+            originIcon = 'FaMapMarkerAlt',
+            destinationIcon = 'FaFlagCheckered',
+            originLabel,
+            destinationLabel,
+            labelSize,
+            labelPosition,
+            theme = 'light',
+            cropEnabled = false,
+            cropBounds = { x: 100, y: 100, width: 400, height: 300 },
+            setCropBounds,
+            cropAspectRatio = 'free',
+            animations = {},
+            mapStyle = 'default',
+            labelFont = 'sans-serif',
+        },
+        ref
+    ) => {
+        const [isDragging, setIsDragging] = useState(false);
+        const [isResizing, setIsResizing] = useState(false);
+        const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+        const localRef = React.useRef(null);
+
+        // Combine forwarded ref with local ref
+        const setRefs = React.useCallback((node) => {
+            localRef.current = node;
+            if (typeof ref === 'function') {
+                ref(node);
+            } else if (ref) {
+                ref.current = node;
+            }
+        }, [ref]);
+
+        // Parse aspect ratio string to number
+        const getAspectRatioValue = (ratio) => {
+            if (ratio === 'free') return null;
+            const [w, h] = ratio.split(':').map(Number);
+            return w / h;
+        };
+
+        const handleCropMouseDown = useCallback((e) => {
+            if (!cropEnabled || !localRef.current) return;
+            e.preventDefault();
+            const rect = localRef.current.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            setDragStart({ x: mouseX - cropBounds.x, y: mouseY - cropBounds.y });
+            setIsDragging(true);
+        }, [cropEnabled, cropBounds.x, cropBounds.y]);
+
+        const handleResizeMouseDown = useCallback((e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (!cropEnabled) return;
+            setIsResizing(true);
+        }, [cropEnabled]);
+
+        const handleMouseMove = useCallback((e) => {
+            if (!cropEnabled || (!isDragging && !isResizing) || !localRef.current) return;
+            const rect = localRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (isDragging) {
+                setCropBounds(prev => ({
+                    ...prev,
+                    x: Math.max(0, x - dragStart.x),
+                    y: Math.max(0, y - dragStart.y),
+                }));
+            } else if (isResizing) {
+                const aspectRatio = getAspectRatioValue(cropAspectRatio);
+                let newWidth = Math.max(50, x - cropBounds.x);
+                let newHeight = Math.max(50, y - cropBounds.y);
+
+                if (aspectRatio) {
+                    // Maintain aspect ratio - use width as the driver
+                    newHeight = newWidth / aspectRatio;
+                }
+
+                setCropBounds(prev => ({
+                    ...prev,
+                    width: newWidth,
+                    height: newHeight,
+                }));
+            }
+        }, [cropEnabled, isDragging, isResizing, dragStart, setCropBounds, cropAspectRatio, cropBounds.x, cropBounds.y]);
+
+        const handleMouseUp = useCallback(() => {
+            setIsDragging(false);
+            setIsResizing(false);
+        }, []);
+        // Map style colors
+        const mapStyles = {
+            default: {
+                light: { background: '#FFFFFF', geographyFill: '#DDD', geographyStroke: '#FFF', labelColor: '#000000' },
+                dark: { background: '#1a1a1a', geographyFill: '#333', geographyStroke: '#222', labelColor: '#FFFFFF' },
+            },
+            minimal: {
+                light: { background: '#FAFAFA', geographyFill: '#E8E8E8', geographyStroke: '#FAFAFA', labelColor: '#333333' },
+                dark: { background: '#111111', geographyFill: '#1a1a1a', geographyStroke: '#111111', labelColor: '#CCCCCC' },
+            },
+            satellite: {
+                light: { background: '#1a3a5c', geographyFill: '#2d5a3f', geographyStroke: '#1a3a5c', labelColor: '#FFFFFF' },
+                dark: { background: '#0d1f2d', geographyFill: '#1a3a2a', geographyStroke: '#0d1f2d', labelColor: '#FFFFFF' },
+            },
+            vintage: {
+                light: { background: '#f5e6d3', geographyFill: '#d4c4a8', geographyStroke: '#f5e6d3', labelColor: '#5c4a32' },
+                dark: { background: '#2a2520', geographyFill: '#3d362d', geographyStroke: '#2a2520', labelColor: '#d4c4a8' },
+            },
+            blueprint: {
+                light: { background: '#1e3a5f', geographyFill: '#2a4a6f', geographyStroke: '#3a6a9f', labelColor: '#FFFFFF' },
+                dark: { background: '#0a1929', geographyFill: '#132f4c', geographyStroke: '#1e4976', labelColor: '#66b2ff' },
+            },
+        };
+        const colors = mapStyles[mapStyle]?.[theme] || mapStyles.default[theme] || mapStyles.default.light;
+
+        // Animation styles
+        const animationStyles = `
+            @keyframes dashFlow {
+                from { stroke-dashoffset: 0; }
+                to { stroke-dashoffset: -40; }
+            }
+            @keyframes drawLine {
+                from { stroke-dashoffset: 1000; }
+                to { stroke-dashoffset: 0; }
+            }
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.3); opacity: 0.7; }
+            }
+            @keyframes travelIcon {
+                0% { offset-distance: 0%; }
+                100% { offset-distance: 100%; }
+            }
+            .travel-icon-animated {
+                offset-rotate: 0deg;
+            }
+        `;
+        const calculateArcPath = (projection, start, end) => {
+            const start2D = projection([start.lng, start.lat]);
+            const end2D = projection([end.lng, end.lat]);
+            if (!start2D || !end2D) return '';
+            const midX = (start2D[0] + end2D[0]) / 2;
+            const midY = (start2D[1] + end2D[1]) / 2 - curveHeight * 100;
+            return `M ${start2D[0]},${start2D[1]} Q ${midX},${midY} ${end2D[0]},${end2D[1]}`;
+        };
+
+        const getLabelXOffset = (position, iconSize, labelSize) => {
+            switch (position) {
+                case 'right':
+                    return iconSize
+                case 'left':
+                    return -(iconSize * 1.2); // Place label to the left of the icon
+                default:
+                    return 0; // Center for top or bottom
+            }
+        };
+
+        const getLabelYOffset = (position, iconSize, labelSize) => {
+            switch (position) {
+                case 'top':
+                    return -(iconSize * 1.2 + labelSize * 0.1); // Place label above the icon
+                case 'bottom':
+                    return iconSize * 1.2 + labelSize * 0.6; // Place label below the icon
+                default:
+                    return labelSize * 0.3; // Slight vertical adjustment for left/right
+            }
+        };
+
+
+        return (
+            <div
+                ref={setRefs}
+                style={{ width: '100%', height: '100%', backgroundColor: colors.background, position: 'relative' }}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+            >
+                <style>{animationStyles}</style>
+                <ComposableMap projection="geoMercator" style={{ width: '100%', height: '100%', backgroundColor: colors.background }}>
+                    <ZoomableGroup>
+                        <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                            {({ geographies, projection }) => (
+                                <>
+                                    {geographies.map((geo) => (
+                                        <Geography key={geo.rsmKey} geography={geo} fill={colors.geographyFill} stroke={colors.geographyStroke} />
+                                    ))}
+                                    <path
+                                        d={calculateArcPath(projection, startPoint, endPoint)}
+                                        fill="none"
+                                        stroke={arcColor}
+                                        strokeWidth={arcWidth}
+                                        strokeDasharray={animations.drawLine ? '1000' : arcDashArray}
+                                        style={{
+                                            animation: animations.dashFlow
+                                                ? 'dashFlow 1s linear infinite'
+                                                : animations.drawLine
+                                                ? 'drawLine 2s ease-out forwards'
+                                                : 'none',
+                                        }}
+                                    />
+                                    {/* Travel Icon */}
+                                    {(() => {
+                                        const start2D = projection([startPoint.lng, startPoint.lat]);
+                                        const end2D = projection([endPoint.lng, endPoint.lat]);
+                                        if (!start2D || !end2D || !travelModeIcon) return null;
+
+                                        const iconX = (start2D[0] + end2D[0]) / 2;
+                                        const iconY = (start2D[1] + end2D[1]) / 2 - curveHeight * 50;
+                                        const pathD = calculateArcPath(projection, startPoint, endPoint);
+
+                                        // Check if destination is to the left of origin (traveling westward)
+                                        const goingLeft = end2D[0] < start2D[0];
+
+                                        // Icons that point right by default and need to flip when going left
+                                        const needsFlip = ['FaPlane', 'FaBicycle', 'FaHorse'].includes(travelModeIcon);
+                                        const flipTransform = (needsFlip && goingLeft) ? 'scale(-1, 1)' : '';
+
+                                        return (
+                                            <g
+                                                style={animations.travelingIcon ? {
+                                                    offsetPath: `path('${pathD}')`,
+                                                    animation: 'travelIcon 3s ease-in-out infinite',
+                                                } : { transform: `translate(${iconX}px, ${iconY}px)` }}
+                                            >
+                                                <g transform={flipTransform}>
+                                                    <circle
+                                                        r={travelIconSize * 0.8}
+                                                        fill={travelIconColor}
+                                                    />
+                                                    <g transform={`translate(${-travelIconSize / 2}, ${-travelIconSize / 2})`}>
+                                                        {availableIcons[travelModeIcon] &&
+                                                            React.cloneElement(availableIcons[travelModeIcon], {
+                                                                size: travelIconSize,
+                                                                color: 'white',
+                                                            })}
+                                                    </g>
+                                                </g>
+                                            </g>
+                                        );
+                                    })()}
+                                </>
+                            )}
+                        </Geographies>
+
+                        {/* Origin Marker */}
+                        <Marker coordinates={[startPoint.lng, startPoint.lat]}>
+                            <g style={animations.pulsingMarkers ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}}>
+                                {/* Draw Circle */}
+                                <circle
+                                    r={originIconSize * 0.8}
+                                    fill={originColor}
+                                />
+                                {/* Draw Icon */}
+                                <g transform={`translate(${-originIconSize / 2}, ${-originIconSize / 2})`}>
+                                    {availableIcons[originIcon] &&
+                                        React.cloneElement(availableIcons[originIcon], {
+                                            size: originIconSize,
+                                            color: 'white',
+                                        })}
+                                </g>
+                                {/* Draw Label */}
+                                <text
+                                    x={getLabelXOffset(labelPosition, originIconSize)}
+                                    y={getLabelYOffset(labelPosition, originIconSize, labelSize)}
+                                    textAnchor={labelPosition === 'right' ? 'start' : labelPosition === 'left' ? 'end' : 'middle'}
+                                    alignmentBaseline={labelPosition === 'top' || labelPosition === 'bottom' ? 'central' : 'middle'}
+                                    fontSize={labelSize}
+                                    fontFamily={labelFont}
+                                    fill={colors.labelColor}
+                                >
+                                    {originLabel}
+                                </text>
+                            </g>
+                        </Marker>
+
+
+                        {/* Destination Marker */}
+                        <Marker coordinates={[endPoint.lng, endPoint.lat]}>
+                            <g style={animations.pulsingMarkers ? { animation: 'pulse 1.5s ease-in-out infinite', animationDelay: '0.75s' } : {}}>
+                                <circle
+                                    r={destinationIconSize * 0.8}
+                                    fill={destinationColor}
+                                />
+                                <g transform={`translate(${-destinationIconSize / 2}, ${-destinationIconSize / 2})`}>
+                                    {availableIcons[destinationIcon] &&
+                                        React.cloneElement(availableIcons[destinationIcon], {
+                                            size: destinationIconSize,
+                                            color: 'white',
+                                        })}
+                                </g>
+                                <text
+                                    x={getLabelXOffset(labelPosition, destinationIconSize, labelSize)}
+                                    y={getLabelYOffset(labelPosition, destinationIconSize, labelSize)}
+                                    textAnchor={labelPosition === 'right' ? 'start' : labelPosition === 'left' ? 'end' : 'middle'}
+                                    alignmentBaseline={labelPosition === 'top' || labelPosition === 'bottom' ? 'central' : 'middle'}
+                                    fontSize={labelSize}
+                                    fontFamily={labelFont}
+                                    fill={colors.labelColor}
+                                >
+                                    {destinationLabel}
+                                </text>
+                            </g>
+                        </Marker>
+                    </ZoomableGroup>
+                </ComposableMap>
+
+                {/* Crop Selection Overlay */}
+                {cropEnabled && (
+                    <div
+                        className="crop-overlay"
+                        style={{
+                            position: 'absolute',
+                            left: cropBounds.x,
+                            top: cropBounds.y,
+                            width: cropBounds.width,
+                            height: cropBounds.height,
+                            border: '2px dashed #3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            cursor: isDragging ? 'grabbing' : 'grab',
+                            boxSizing: 'border-box',
+                        }}
+                        onMouseDown={handleCropMouseDown}
+                    >
+                        {/* Resize handle */}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                right: -6,
+                                bottom: -6,
+                                width: 12,
+                                height: 12,
+                                backgroundColor: '#3b82f6',
+                                cursor: 'nwse-resize',
+                                borderRadius: 2,
+                            }}
+                            onMouseDown={handleResizeMouseDown}
+                        />
+                        {/* Size indicator */}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                bottom: 4,
+                                left: 4,
+                                fontSize: 10,
+                                color: '#3b82f6',
+                                fontWeight: 'bold',
+                                backgroundColor: 'rgba(255,255,255,0.8)',
+                                padding: '1px 4px',
+                                borderRadius: 2,
+                            }}
+                        >
+                            {Math.round(cropBounds.width)} x {Math.round(cropBounds.height)}
+                        </div>
+                    </div>
+                )}
+
+                {/* Dark overlay outside crop area */}
+                {cropEnabled && (
+                    <>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: cropBounds.y, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
+                        <div style={{ position: 'absolute', top: cropBounds.y, left: 0, width: cropBounds.x, height: cropBounds.height, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
+                        <div style={{ position: 'absolute', top: cropBounds.y, left: cropBounds.x + cropBounds.width, right: 0, height: cropBounds.height, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
+                        <div style={{ position: 'absolute', top: cropBounds.y + cropBounds.height, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', pointerEvents: 'none' }} />
+                    </>
+                )}
+            </div>
+        );
+    }
+);
+
+export default FlightMap;

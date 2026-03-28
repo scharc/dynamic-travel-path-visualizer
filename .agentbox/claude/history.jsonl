@@ -1,0 +1,26 @@
+{"display":"dynamic flight path","pastedContents":{},"timestamp":1768455283006,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"I want some different color themes. I want to make a white one black web site and the exported svgs are not working for me","pastedContents":{},"timestamp":1768455466093,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"run it","pastedContents":{},"timestamp":1768455965070,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"lets add some more features to this. animation? how would this work? more fonts to choose from","pastedContents":{},"timestamp":1768460193272,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"color palettes","pastedContents":{},"timestamp":1768460207105,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"what about photo upload for geo extraction?","pastedContents":{},"timestamp":1768460267862,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"I do not see a upload thing?","pastedContents":{},"timestamp":1768460293206,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"lets make it two upload forms for destination and origin. ","pastedContents":{},"timestamp":1768460345218,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"and add a crop / select export thingy as well that is optional","pastedContents":{},"timestamp":1768460379764,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"the crop should also accept aspect ratio and then work on the rest of the features","pastedContents":{},"timestamp":1768460630285,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"there is only a wdith and height field. i want aspect ratio not fixed size","pastedContents":{},"timestamp":1768460712629,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"the selection for the crop is not working in a away, i can not select any of the options. the traveling icon animation should not loop. it should always go form start to finsish and then restart","pastedContents":{},"timestamp":1768461259202,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"the crop is not working. and how does the animaten export work?","pastedContents":{},"timestamp":1768461327490,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"no the crop is working fine but the exported section is wrong","pastedContents":{},"timestamp":1768461382591,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"can we create a zip file with css and svg and everything the user needs to add this with animation","pastedContents":{},"timestamp":1768461458307,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"now I can not move the crop anymore","pastedContents":{},"timestamp":1768461493974,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"lets always point the aircraft icon on the flight path to destination","pastedContents":{},"timestamp":1768461700161,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"and the bicile and horse as well. be carful you can not rotate it you have to flip it accordingly","pastedContents":{},"timestamp":1768461750447,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"no, car and train do not need anything they are facing front. airplain is wrong. and horse is normally pointing to the right","pastedContents":{},"timestamp":1768461798572,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"we can rotate the icons if we keep the flip for left right orientation","pastedContents":{},"timestamp":1768461890960,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"we should add local storage ","pastedContents":{},"timestamp":1768461956869,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"we should follow the arc with the icon and not just point stupidly to the destination","pastedContents":{},"timestamp":1768462002795,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"for the css selector, do we have unique names?","pastedContents":{},"timestamp":1768471005426,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"/exit ","pastedContents":{},"timestamp":1768474189606,"project":"/workspace","sessionId":"4a298a74-2a19-4098-a182-b0be17bba383"}
+{"display":"write a commit and do not add any none essential infos to the commit. i am the sole author","pastedContents":{},"timestamp":1768474236857,"project":"/workspace","sessionId":"d4f7b71b-f77e-4948-a50c-b2add6269f3f"}
+{"display":"/exit ","pastedContents":{},"timestamp":1768474286298,"project":"/workspace","sessionId":"d4f7b71b-f77e-4948-a50c-b2add6269f3f"}

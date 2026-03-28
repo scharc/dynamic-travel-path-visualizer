@@ -1,0 +1,509 @@
+import React, { useState, useRef, useEffect } from 'react';
+import EXIF from 'exif-js';
+import JSZip from 'jszip';
+import Sidebar from './components/Sidebar';
+import FlightMap from './components/FlightMap';
+
+// Helper to get value from localStorage with fallback
+const getStoredValue = (key, defaultValue) => {
+  try {
+    const stored = localStorage.getItem(`flightPath_${key}`);
+    if (stored !== null) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn(`Error reading ${key} from localStorage:`, e);
+  }
+  return defaultValue;
+};
+
+function App() {
+  const [originLat, setOriginLat] = useState(() => getStoredValue('originLat', 49.0078593));
+  const [originLng, setOriginLng] = useState(() => getStoredValue('originLng', 8.4010293));
+  const [destinationLat, setDestinationLat] = useState(() => getStoredValue('destinationLat', 40.6973709));
+  const [destinationLng, setDestinationLng] = useState(() => getStoredValue('destinationLng', -74.144487));
+  const [originLabel, setOriginLabel] = useState(() => getStoredValue('originLabel', 'Karlsruhe'));
+  const [destinationLabel, setDestinationLabel] = useState(() => getStoredValue('destinationLabel', 'New York'));
+  const [originColor, setOriginColor] = useState(() => getStoredValue('originColor', '#0000ff'));
+  const [destinationColor, setDestinationColor] = useState(() => getStoredValue('destinationColor', '#ff0000'));
+  const [arcColor, setArcColor] = useState(() => getStoredValue('arcColor', '#00ff00'));
+  const [arcWidth, setArcWidth] = useState(() => getStoredValue('arcWidth', 2));
+  const [arcDashArray, setArcDashArray] = useState(() => getStoredValue('arcDashArray', 5));
+  const [curveHeight, setCurveHeight] = useState(() => getStoredValue('curveHeight', 0.5));
+
+  // Icon states
+  const [originIconSize, setOriginIconSize] = useState(() => getStoredValue('originIconSize', 10));
+  const [destinationIconSize, setDestinationIconSize] = useState(() => getStoredValue('destinationIconSize', 10));
+  const [travelModeIcon, setTravelModeIcon] = useState(() => getStoredValue('travelModeIcon', 'FaPlane'));
+  const [travelIconColor, setTravelIconColor] = useState(() => getStoredValue('travelIconColor', '#ff6600'));
+  const [travelIconSize, setTravelIconSize] = useState(() => getStoredValue('travelIconSize', 10));
+  const [originIcon, setOriginIcon] = useState(() => getStoredValue('originIcon', 'FaMapMarkerAlt'));
+  const [destinationIcon, setDestinationIcon] = useState(() => getStoredValue('destinationIcon', 'FaFlagCheckered'));
+  const [travelIconRotation, setTravelIconRotation] = useState(() => getStoredValue('travelIconRotation', 0));
+
+  // Label states
+  const [labelSize, setLabelSize] = useState(() => getStoredValue('labelSize', 12));
+  const [labelPosition, setLabelPosition] = useState(() => getStoredValue('labelPosition', 'top'));
+
+  // Theme state: 'light' or 'dark'
+  const [theme, setTheme] = useState(() => getStoredValue('theme', 'light'));
+
+  // Crop/selection state (don't persist crop bounds as they depend on screen size)
+  const [cropEnabled, setCropEnabled] = useState(false);
+  const [cropBounds, setCropBounds] = useState({ x: 100, y: 100, width: 400, height: 300 });
+  const [cropAspectRatio, setCropAspectRatio] = useState(() => getStoredValue('cropAspectRatio', 'free'));
+
+  // Animation state
+  const [animations, setAnimations] = useState(() => getStoredValue('animations', {
+    dashFlow: false,
+    drawLine: false,
+    travelingIcon: false,
+    pulsingMarkers: false,
+  }));
+
+  // Color palette state
+  const [colorPalette, setColorPalette] = useState(() => getStoredValue('colorPalette', 'custom'));
+  const [mapStyle, setMapStyle] = useState(() => getStoredValue('mapStyle', 'default'));
+
+  // Font state
+  const [labelFont, setLabelFont] = useState(() => getStoredValue('labelFont', 'sans-serif'));
+
+  const svgRef = useRef(null); // Ref to access the SVG element
+
+  // Save all settings to localStorage whenever they change
+  useEffect(() => {
+    const settings = {
+      originLat, originLng, destinationLat, destinationLng,
+      originLabel, destinationLabel,
+      originColor, destinationColor, arcColor,
+      arcWidth, arcDashArray, curveHeight,
+      originIconSize, destinationIconSize,
+      travelModeIcon, travelIconColor, travelIconSize,
+      originIcon, destinationIcon, travelIconRotation,
+      labelSize, labelPosition, theme, cropAspectRatio,
+      animations, colorPalette, mapStyle, labelFont
+    };
+
+    Object.entries(settings).forEach(([key, value]) => {
+      try {
+        localStorage.setItem(`flightPath_${key}`, JSON.stringify(value));
+      } catch (e) {
+        console.warn(`Error saving ${key} to localStorage:`, e);
+      }
+    });
+  }, [
+    originLat, originLng, destinationLat, destinationLng,
+    originLabel, destinationLabel,
+    originColor, destinationColor, arcColor,
+    arcWidth, arcDashArray, curveHeight,
+    originIconSize, destinationIconSize,
+    travelModeIcon, travelIconColor, travelIconSize,
+    originIcon, destinationIcon, travelIconRotation,
+    labelSize, labelPosition, theme, cropAspectRatio,
+    animations, colorPalette, mapStyle, labelFont
+  ]);
+
+  const extractGPSFromImage = (file, onSuccess) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      EXIF.getData(file, function () {
+        const lat = EXIF.getTag(this, 'GPSLatitude');
+        const lng = EXIF.getTag(this, 'GPSLongitude');
+        const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+        const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
+
+        if (lat && lng) {
+          const decimalLat =
+            (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === 'S' ? -1 : 1);
+          const decimalLng =
+            (lng[0] + lng[1] / 60 + lng[2] / 3600) * (lngRef === 'W' ? -1 : 1);
+          onSuccess(decimalLat, decimalLng);
+        } else {
+          alert('No GPS data found in the image.');
+        }
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleOriginImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      extractGPSFromImage(file, (lat, lng) => {
+        setOriginLat(lat);
+        setOriginLng(lng);
+      });
+    }
+  };
+
+  const handleDestinationImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      extractGPSFromImage(file, (lat, lng) => {
+        setDestinationLat(lat);
+        setDestinationLng(lng);
+      });
+    }
+  };
+
+  const handleExport = () => {
+    const svgElement = svgRef.current.querySelector('svg');
+    if (!svgElement) {
+      alert('SVG element not found.');
+      return;
+    }
+
+    // Clone the SVG to avoid modifying the original
+    const clonedSvg = svgElement.cloneNode(true);
+
+    // If crop is enabled, transform screen coordinates to SVG coordinates
+    if (cropEnabled) {
+      // Get the SVG's current viewBox and dimensions
+      const svgRect = svgElement.getBoundingClientRect();
+      const viewBox = svgElement.viewBox.baseVal;
+
+      // Calculate scale factors between screen pixels and SVG units
+      const scaleX = viewBox.width / svgRect.width;
+      const scaleY = viewBox.height / svgRect.height;
+
+      // Transform crop bounds from screen coordinates to SVG coordinates
+      const svgCropX = viewBox.x + (cropBounds.x * scaleX);
+      const svgCropY = viewBox.y + (cropBounds.y * scaleY);
+      const svgCropWidth = cropBounds.width * scaleX;
+      const svgCropHeight = cropBounds.height * scaleY;
+
+      clonedSvg.setAttribute('viewBox', `${svgCropX} ${svgCropY} ${svgCropWidth} ${svgCropHeight}`);
+      clonedSvg.setAttribute('width', cropBounds.width);
+      clonedSvg.setAttribute('height', cropBounds.height);
+    }
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clonedSvg);
+
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+
+    // Generate file name
+    let fileName = Array
+      .from(originLabel)
+      .filter((c) => c.match(/[a-zA-Z0-9]/))
+      .join('');
+    fileName += '-';
+
+    fileName += Array
+      .from(destinationLabel)
+      .filter((c) => c.match(/[a-zA-Z0-9]/))
+      .join('');
+
+    fileName += '-by-';
+    fileName += travelModeIcon.replace('Fa', '');
+
+    link.download = `${fileName}.svg`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportZip = async () => {
+    const svgElement = svgRef.current.querySelector('svg');
+    if (!svgElement) {
+      alert('SVG element not found.');
+      return;
+    }
+
+    // Generate base file name
+    let baseName = Array.from(originLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('');
+    baseName += '-';
+    baseName += Array.from(destinationLabel).filter((c) => c.match(/[a-zA-Z0-9]/)).join('');
+    baseName += '-by-' + travelModeIcon.replace('Fa', '');
+
+    // Clone and prepare SVG
+    const clonedSvg = svgElement.cloneNode(true);
+
+    // Handle crop if enabled
+    if (cropEnabled) {
+      const svgRect = svgElement.getBoundingClientRect();
+      const viewBox = svgElement.viewBox.baseVal;
+      const scaleX = viewBox.width / svgRect.width;
+      const scaleY = viewBox.height / svgRect.height;
+      const svgCropX = viewBox.x + (cropBounds.x * scaleX);
+      const svgCropY = viewBox.y + (cropBounds.y * scaleY);
+      const svgCropWidth = cropBounds.width * scaleX;
+      const svgCropHeight = cropBounds.height * scaleY;
+      clonedSvg.setAttribute('viewBox', `${svgCropX} ${svgCropY} ${svgCropWidth} ${svgCropHeight}`);
+      clonedSvg.setAttribute('width', cropBounds.width);
+      clonedSvg.setAttribute('height', cropBounds.height);
+    }
+
+    // Add animation classes to SVG elements
+    const arcPath = clonedSvg.querySelector('path[stroke][fill="none"]');
+    if (arcPath) {
+      if (animations.dashFlow) arcPath.classList.add('arc-dash-flow');
+      if (animations.drawLine) arcPath.classList.add('arc-draw-line');
+    }
+
+    // Add class to markers for pulsing
+    const markers = clonedSvg.querySelectorAll('g[transform]');
+    if (animations.pulsingMarkers) {
+      markers.forEach((m, i) => m.classList.add('marker-pulse', `marker-${i}`));
+    }
+
+    // Add link to external CSS
+    const styleLink = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    styleLink.textContent = '@import url("animations.css");';
+    clonedSvg.insertBefore(styleLink, clonedSvg.firstChild);
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clonedSvg);
+
+    // Generate CSS file content
+    const cssContent = `/* Flight Path Animations */
+/* Generated by Dynamic Travel Path Visualizer */
+
+/* Flowing dashes animation */
+@keyframes dashFlow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -40; }
+}
+
+.arc-dash-flow {
+  animation: dashFlow 1s linear infinite;
+}
+
+/* Draw line animation */
+@keyframes drawLine {
+  from { stroke-dashoffset: 2000; }
+  to { stroke-dashoffset: 0; }
+}
+
+.arc-draw-line {
+  stroke-dasharray: 2000;
+  animation: drawLine 2s ease-out forwards;
+}
+
+/* Pulsing markers animation */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+.marker-pulse {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.marker-1 {
+  animation-delay: 0.75s;
+}
+
+/* Traveling icon animation */
+@keyframes travelIcon {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+.travel-icon-animated {
+  offset-rotate: 0deg;
+  animation: travelIcon 3s ease-in-out infinite;
+}
+`;
+
+    // Generate HTML preview file
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${baseName} - Flight Path</title>
+  <link rel="stylesheet" href="animations.css">
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f0f0f0;
+    }
+    .container {
+      max-width: 100%;
+      padding: 20px;
+    }
+    object, img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Use object tag to enable CSS animations -->
+    <object type="image/svg+xml" data="${baseName}.svg" width="100%">
+      <!-- Fallback to img if object doesn't work -->
+      <img src="${baseName}.svg" alt="Flight path from ${originLabel} to ${destinationLabel}">
+    </object>
+  </div>
+</body>
+</html>
+`;
+
+    // Generate README
+    const readmeContent = `# ${baseName} Flight Path
+
+## Files Included
+- \`${baseName}.svg\` - The flight path SVG graphic
+- \`animations.css\` - CSS animations for the SVG
+- \`preview.html\` - HTML file to preview the animated SVG
+
+## Usage
+
+### Option 1: Use the HTML preview
+Simply open \`preview.html\` in a web browser to see the animated flight path.
+
+### Option 2: Embed in your website
+1. Copy both \`${baseName}.svg\` and \`animations.css\` to your website
+2. Link the CSS in your HTML:
+   \`\`\`html
+   <link rel="stylesheet" href="animations.css">
+   \`\`\`
+3. Embed the SVG using an object tag (required for CSS animations):
+   \`\`\`html
+   <object type="image/svg+xml" data="${baseName}.svg" width="800"></object>
+   \`\`\`
+
+### Option 3: Inline SVG
+For full animation support, you can also inline the SVG directly in your HTML and include the CSS.
+
+## Animations Included
+${animations.dashFlow ? '- ✅ Flowing dashes along the path\n' : ''}${animations.drawLine ? '- ✅ Line drawing effect\n' : ''}${animations.pulsingMarkers ? '- ✅ Pulsing origin/destination markers\n' : ''}${animations.travelingIcon ? '- ✅ Traveling icon along path\n' : ''}
+## Generated with
+Dynamic Travel Path Visualizer
+`;
+
+    // Create ZIP file
+    const zip = new JSZip();
+    zip.file(`${baseName}.svg`, svgString);
+    zip.file('animations.css', cssContent);
+    zip.file('preview.html', htmlContent);
+    zip.file('README.md', readmeContent);
+
+    // Generate and download
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${baseName}.zip`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar
+        originLat={originLat}
+        setOriginLat={setOriginLat}
+        originLng={originLng}
+        setOriginLng={setOriginLng}
+        originLabel={originLabel}
+        setOriginLabel={setOriginLabel}
+        originColor={originColor}
+        setOriginColor={setOriginColor}
+        destinationLat={destinationLat}
+        setDestinationLat={setDestinationLat}
+        destinationLng={destinationLng}
+        setDestinationLng={setDestinationLng}
+        destinationLabel={destinationLabel}
+        setDestinationLabel={setDestinationLabel}
+        destinationColor={destinationColor}
+        setDestinationColor={setDestinationColor}
+        arcColor={arcColor}
+        setArcColor={setArcColor}
+        arcWidth={arcWidth}
+        setArcWidth={setArcWidth}
+        arcDashArray={arcDashArray}
+        setArcDashArray={setArcDashArray}
+        curveHeight={curveHeight}
+        setCurveHeight={setCurveHeight}
+        handleOriginImageUpload={handleOriginImageUpload}
+        handleDestinationImageUpload={handleDestinationImageUpload}
+        handleExport={handleExport}
+        handleExportZip={handleExportZip}
+        originIconSize={originIconSize}
+        setOriginIconSize={setOriginIconSize}
+        destinationIconSize={destinationIconSize}
+        setDestinationIconSize={setDestinationIconSize}
+        travelModeIcon={travelModeIcon}
+        setTravelModeIcon={setTravelModeIcon}
+        travelIconColor={travelIconColor}
+        setTravelIconColor={setTravelIconColor}
+        travelIconSize={travelIconSize}
+        setTravelIconSize={setTravelIconSize}
+        travelIconRotation={travelIconRotation}
+        setTravelIconRotation={setTravelIconRotation}
+        originIcon={originIcon}
+        setOriginIcon={setOriginIcon}
+        destinationIcon={destinationIcon}
+        setDestinationIcon={setDestinationIcon}
+        labelSize={labelSize}
+        setLabelSize={setLabelSize}
+        labelPosition={labelPosition}
+        setLabelPosition={setLabelPosition}
+        theme={theme}
+        setTheme={setTheme}
+        cropEnabled={cropEnabled}
+        setCropEnabled={setCropEnabled}
+        cropBounds={cropBounds}
+        setCropBounds={setCropBounds}
+        cropAspectRatio={cropAspectRatio}
+        setCropAspectRatio={setCropAspectRatio}
+        animations={animations}
+        setAnimations={setAnimations}
+        colorPalette={colorPalette}
+        setColorPalette={setColorPalette}
+        mapStyle={mapStyle}
+        setMapStyle={setMapStyle}
+        labelFont={labelFont}
+        setLabelFont={setLabelFont}
+      />
+      <div style={{ flex: 1 }}>
+        <FlightMap
+          ref={svgRef}
+          startPoint={{ lat: originLat, lng: originLng }}
+          endPoint={{ lat: destinationLat, lng: destinationLng }}
+          arcColor={arcColor}
+          arcWidth={arcWidth}
+          arcDashArray={`${arcDashArray},${arcDashArray}`}
+          curveHeight={curveHeight}
+          originIconSize={originIconSize}
+          destinationIconSize={destinationIconSize}
+          travelModeIcon={travelModeIcon}
+          travelIconColor={travelIconColor}
+          travelIconSize={travelIconSize}
+          originColor={originColor}
+          destinationColor={destinationColor}
+          originIcon={originIcon}
+          destinationIcon={destinationIcon}
+          travelIconRotation={travelIconRotation}
+          originLabel={originLabel}
+          destinationLabel={destinationLabel}
+          labelSize={labelSize}
+          labelPosition={labelPosition}
+          theme={theme}
+          cropEnabled={cropEnabled}
+          cropBounds={cropBounds}
+          setCropBounds={setCropBounds}
+          cropAspectRatio={cropAspectRatio}
+          animations={animations}
+          mapStyle={mapStyle}
+          labelFont={labelFont}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default App;
